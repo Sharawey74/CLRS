@@ -1,0 +1,625 @@
+import pandas as pd
+import numpy as np
+import re
+import email
+import email.parser
+from bs4 import BeautifulSoup
+import urllib.parse
+from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
+import joblib
+import warnings
+import matplotlib.pyplot as plt
+import seaborn as sns
+import os
+from urllib.parse import urlparse
+import tkinter as tk
+from tkinter import filedialog, scrolledtext, messagebox
+# Add to top of Phishing.txt
+import requests
+import dns.resolver
+from urllib.parse import urlparse
+import socket
+
+from PhishingEmailDetector import PhishingEmailDetector
+
+# Suppress warnings
+warnings.filterwarnings('ignore')
+
+
+class PhishingDetectorUI:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Phishing Email Detector")
+        self.root.geometry("800x600")
+
+        self.detector = PhishingEmailDetector()
+
+        # Create menu
+        self.menu = tk.Menu(root)
+        self.root.config(menu=self.menu)
+
+        # File menu
+        self.file_menu = tk.Menu(self.menu, tearoff=0)
+        self.menu.add_cascade(label="File", menu=self.file_menu)
+        self.file_menu.add_command(label="Load Model", command=self.load_model)
+        self.file_menu.add_command(label="Train New Model", command=self.train_model)
+        self.file_menu.add_separator()
+        self.file_menu.add_command(label="Exit", command=root.quit)
+
+        # Analysis menu
+        self.analysis_menu = tk.Menu(self.menu, tearoff=0)
+        self.menu.add_cascade(label="Analysis", menu=self.analysis_menu)
+        self.analysis_menu.add_command(label="Analyze Email File", command=self.analyze_email_file)
+        self.analysis_menu.add_command(label="Analyze Email Text", command=self.toggle_email_input)
+
+        # Help menu
+        self.help_menu = tk.Menu(self.menu, tearoff=0)
+        self.menu.add_cascade(label="Help", menu=self.help_menu)
+        self.help_menu.add_command(label="About", command=self.show_about)
+
+        # Status frame
+        self.status_frame = tk.Frame(root)
+        self.status_frame.pack(fill=tk.X, padx=10, pady=5)
+
+        self.status_label = tk.Label(self.status_frame, text="Status: No model loaded", bd=1, relief=tk.SUNKEN,
+                                     anchor=tk.W)
+        self.status_label.pack(fill=tk.X)
+
+        # Input frame
+        self.input_frame = tk.Frame(root)
+        self.input_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+
+        self.input_label = tk.Label(self.input_frame, text="Paste email content here:")
+        self.input_label.pack(anchor=tk.W)
+
+        self.email_input = scrolledtext.ScrolledText(self.input_frame, height=12)
+        self.email_input.pack(fill=tk.BOTH, expand=True)
+
+        # Button frame
+        self.button_frame = tk.Frame(root)
+        self.button_frame.pack(fill=tk.X, padx=10, pady=5)
+
+        self.analyze_button = tk.Button(self.button_frame, text="Analyze Email", command=self.analyze_email_text)
+        self.analyze_button.pack(side=tk.RIGHT)
+
+        self.clear_button = tk.Button(self.button_frame, text="Clear", command=self.clear_input)
+        self.clear_button.pack(side=tk.RIGHT, padx=5)
+
+        # Results frame
+        self.results_frame = tk.Frame(root)
+        self.results_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+
+        self.results_label = tk.Label(self.results_frame, text="Analysis Results:")
+        self.results_label.pack(anchor=tk.W)
+
+        self.results_text = scrolledtext.ScrolledText(self.results_frame, height=12)
+        self.results_text.pack(fill=tk.BOTH, expand=True)
+        self.results_text.config(state=tk.DISABLED)
+
+        # Check if a model file exists and load it
+        if os.path.exists('phishing_detector_model.pkl'):
+            self.load_existing_model()
+
+    def load_existing_model(self):
+        """
+        Load the model if it exists
+        """
+        success = self.detector.load_model()
+        if success:
+            self.status_label.config(text="Status: Model loaded successfully")
+        else:
+            self.status_label.config(text="Status: Failed to load model")
+
+    def load_model(self):
+        """
+        Load a model from file
+        """
+        filename = filedialog.askopenfilename(
+            title="Select model file",
+            filetypes=(("Pickle files", "*.pkl"), ("All files", "*.*"))
+        )
+
+        if filename:
+            success = self.detector.load_model(filename)
+            if success:
+                self.status_label.config(text=f"Status: Model loaded from {filename}")
+            else:
+                messagebox.showerror("Error", "Failed to load model")
+
+    def train_model(self):
+        """
+        Train a new model
+        """
+        # Create a new top-level window
+        train_window = tk.Toplevel(self.root)
+        train_window.title("Train New Model")
+        train_window.geometry("500x300")
+
+        # Phishing emails directory
+        phishing_frame = tk.Frame(train_window)
+        phishing_frame.pack(fill=tk.X, padx=10, pady=5)
+
+        phishing_label = tk.Label(phishing_frame, text="Phishing Emails Directory:")
+        phishing_label.pack(side=tk.LEFT)
+
+        phishing_path = tk.StringVar()
+        phishing_entry = tk.Entry(phishing_frame, textvariable=phishing_path, width=40)
+        phishing_entry.pack(side=tk.LEFT, padx=5)
+
+        phishing_button = tk.Button(phishing_frame, text="Browse",
+                                    command=lambda: phishing_path.set(filedialog.askdirectory()))
+        phishing_button.pack(side=tk.LEFT)
+
+        # Legitimate emails directory
+        legitimate_frame = tk.Frame(train_window)
+        legitimate_frame.pack(fill=tk.X, padx=10, pady=5)
+
+        legitimate_label = tk.Label(legitimate_frame, text="Legitimate Emails Directory:")
+        legitimate_label.pack(side=tk.LEFT)
+
+        legitimate_path = tk.StringVar()
+        legitimate_entry = tk.Entry(legitimate_frame, textvariable=legitimate_path, width=40)
+        legitimate_entry.pack(side=tk.LEFT, padx=5)
+
+        legitimate_button = tk.Button(legitimate_frame, text="Browse",
+                                      command=lambda: legitimate_path.set(filedialog.askdirectory()))
+        legitimate_button.pack(side=tk.LEFT)
+
+        # Model save path
+        save_frame = tk.Frame(train_window)
+        save_frame.pack(fill=tk.X, padx=10, pady=5)
+
+        save_label = tk.Label(save_frame, text="Save Model As:")
+        save_label.pack(side=tk.LEFT)
+
+        save_path = tk.StringVar(value="phishing_detector_model.pkl")
+        save_entry = tk.Entry(save_frame, textvariable=save_path, width=40)
+        save_entry.pack(side=tk.LEFT, padx=5)
+
+        save_button = tk.Button(save_frame, text="Browse",
+                                command=lambda: save_path.set(filedialog.asksaveasfilename(
+                                    defaultextension=".pkl",
+                                    filetypes=[("Pickle files", "*.pkl"), ("All files", "*.*")]
+                                )))
+        save_button.pack(side=tk.LEFT)
+
+        # Status label
+        status_label = tk.Label(train_window, text="", bd=1, relief=tk.SUNKEN, anchor=tk.W)
+        status_label.pack(fill=tk.X, side=tk.BOTTOM, padx=10, pady=5)
+
+        # Train button
+        def start_training():
+            phish_dir = phishing_path.get()
+            legit_dir = legitimate_path.get()
+            save_file = save_path.get()
+
+            if not phish_dir or not legit_dir:
+                messagebox.showerror("Error", "Please select both directories")
+                return
+
+            try:
+                status_label.config(text="Loading data...")
+                train_window.update()
+
+                # Load data
+                df = self.detector.load_data(phish_dir, legit_dir)
+
+                status_label.config(text="Extracting features...")
+                train_window.update()
+
+                # Extract features
+                X = self.detector.extract_features(df)
+                y = df['is_phishing']
+
+                status_label.config(text="Training model...")
+                train_window.update()
+
+                # Train model
+                results = self.detector.train_model(X, y)
+
+                # Save model
+                self.detector.save_model(save_file)
+
+                status_label.config(text=f"Model trained successfully! Accuracy: {results['accuracy']:.4f}")
+                self.status_label.config(text=f"Status: New model trained and loaded")
+
+                # Close the training window after a delay
+                train_window.after(3000, train_window.destroy)
+
+            except Exception as e:
+                status_label.config(text=f"Error: {str(e)}")
+                messagebox.showerror("Error", f"Training failed: {str(e)}")
+
+        train_button = tk.Button(train_window, text="Start Training", command=start_training)
+        train_button.pack(pady=10)
+
+    def analyze_email_file(self):
+        """
+        Analyze an email file
+        """
+        if self.detector.model is None:
+            messagebox.showerror("Error", "No model loaded. Please load a model first.")
+            return
+
+        filename = filedialog.askopenfilename(
+            title="Select email file",
+            filetypes=(("Email files", "*.eml"), ("Text files", "*.txt"), ("All files", "*.*"))
+        )
+
+        if not filename:
+            return
+
+        try:
+            with open(filename, 'r', encoding='utf-8', errors='ignore') as f:
+                email_content = f.read()
+
+            self.email_input.delete(1.0, tk.END)
+            self.email_input.insert(tk.END, email_content)
+
+            self.analyze_email_text()
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to read email file: {str(e)}")
+
+    def toggle_email_input(self):
+        """
+        Toggle the email input visibility
+        """
+        if self.input_frame.winfo_ismapped():
+            self.input_frame.pack_forget()
+            self.button_frame.pack_forget()
+            self.analysis_menu.entryconfigure("Analyze Email Text", label="Show Email Input")
+        else:
+            self.results_frame.pack_forget()
+            self.input_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+            self.button_frame.pack(fill=tk.X, padx=10, pady=5)
+            self.results_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+            self.analysis_menu.entryconfigure("Show Email Input", label="Analyze Email Text")
+
+    def analyze_email_text(self):
+        """
+        Analyze the email text in the input field
+        """
+        if self.detector.model is None:
+            messagebox.showerror("Error", "No model loaded. Please load a model first.")
+            return
+
+        email_content = self.email_input.get(1.0, tk.END)
+
+        if not email_content.strip():
+            messagebox.showerror("Error", "No email content provided.")
+            return
+
+        # Analyze the email
+        result = self.detector.analyze_single_email(email_content)
+
+        if result:
+            # Display results
+            self.results_text.config(state=tk.NORMAL)
+            self.results_text.delete(1.0, tk.END)
+
+            # Format the result nicely
+            phishing_status = "PHISHING" if result['is_phishing'] else "LEGITIMATE"
+            phishing_prob = result['probability'] * 100
+
+            result_text = f"ANALYSIS RESULT: {phishing_status} (Confidence: {phishing_prob:.2f}%)\n\n"
+            result_text += f"Sender: {result['sender']}\n"
+            result_text += f"Domain: {result['sender_domain']}\n"
+            result_text += f"Subject: {result['subject']}\n\n"
+
+            result_text += "KEY INDICATORS:\n"
+            result_text += f"- URLs detected: {result['url_count']}\n"
+            result_text += f"- Suspicious URLs: {'Yes' if result['has_suspicious_url'] else 'No'}\n"
+            result_text += f"- IP-based URLs: {'Yes' if result['has_ip_url'] else 'No'}\n"
+            result_text += f"- Urgent language: {'Yes' if result['contains_urgent_words'] else 'No'}\n"
+            result_text += f"- Money-related content: {'Yes' if result['contains_money_words'] else 'No'}\n"
+            result_text += f"- Sensitive information requests: {'Yes' if result['contains_sensitive_words'] else 'No'}\n"
+            result_text += f"- Action requests (click, download, etc.): {'Yes' if result['contains_action_words'] else 'No'}\n\n"
+
+            if result['urls']:
+                result_text += "EXTRACTED URLS:\n"
+                for url in result['urls'][:10]:  # Show up to 10 URLs
+                    result_text += f"- {url}\n"
+
+                if len(result['urls']) > 10:
+                    result_text += f"... and {len(result['urls']) - 10} more URLs\n"
+                result_text += "\n"
+
+            result_text += "TOP CONTRIBUTING FEATURES:\n"
+            for feature, contribution in result['top_features']:
+                # Clean up feature names for display
+                display_name = feature
+                if feature.startswith('text_'):
+                    display_name = "Text content"
+                elif feature.startswith('domain_'):
+                    display_name = f"Domain: {feature.split('_', 1)[1]}"
+
+                # Only show significant contributions
+                if abs(contribution) > 0.01:
+                    result_text += f"- {display_name}: {contribution:.4f}\n"
+
+            self.results_text.insert(tk.END, result_text)
+            self.results_text.config(state=tk.DISABLED)
+
+            # Set a background color based on the result
+            if result['is_phishing']:
+                self.results_text.config(background="#ffe6e6")  # Light red for phishing
+            else:
+                self.results_text.config(background="#e6ffe6")  # Light green for legitimate
+        else:
+            messagebox.showerror("Error", "Failed to analyze email")
+
+    def clear_input(self):
+        """
+        Clear the input field
+        """
+        self.email_input.delete(1.0, tk.END)
+
+    def show_about(self):
+        """
+        Show information about the application
+        """
+        about_text = """Phishing Email Detector v1.0
+
+This application uses machine learning to detect phishing emails based on various features extracted from the email content, including:
+
+- Sender information
+- Email body text
+- URLs in the email
+- Language patterns and keywords
+- Text similarity to known phishing patterns
+
+The model is trained on a dataset of known phishing and legitimate emails.
+
+© 2025 - Phishing Detection Project"""
+
+        messagebox.showinfo("About", about_text)
+
+
+def simulate_training():
+    """
+    Function to simulate training with sample data for demonstration purposes
+    """
+    print("Simulating model training with synthetic data...")
+
+    # Create a detector instance
+    detector = PhishingEmailDetector()
+
+    # Create synthetic data
+    np.random.seed(42)
+    num_samples = 1000
+
+    # Generate synthetic data
+    data = []
+
+    # Legitimate emails (label 0)
+    for i in range(num_samples // 2):
+        # Generate a random legitimate email
+        domains = ['gmail.com', 'yahoo.com', 'outlook.com', 'company.com', 'university.edu']
+        senders = ['john.doe', 'jane.smith', 'support', 'info', 'contact', 'admin', 'service']
+        subjects = [
+            'Meeting reminder', 'Your receipt', 'Weekly newsletter',
+            'Project update', 'Team announcement', 'Welcome aboard',
+            'Thank you for your purchase', 'Confirmation', 'Invitation'
+        ]
+
+        sender_name = np.random.choice(senders)
+        domain = np.random.choice(domains)
+        sender = f"{sender_name}@{domain}"
+        subject = np.random.choice(subjects)
+
+        # Generate legitimate body content
+        legitimate_bodies = [
+            "Hello, just wanted to remind you about our meeting tomorrow at 2pm. Best regards, John",
+            f"Thank you for your recent purchase. Your order #{np.random.randint(10000, 99999)} has been confirmed.",
+            "Please find attached the quarterly report for your review. Let me know if you have any questions.",
+            "This is a friendly reminder that your subscription will renew next month. No action is needed.",
+            "Congratulations! Your application has been approved. Welcome to our platform.",
+            "We've updated our privacy policy. Please review the changes at your convenience.",
+            "Your account statement is now available. You can view it by logging into your account.",
+            "We're writing to inform you about scheduled maintenance this weekend. Services will be unavailable from 2-4am.",
+            "Thank you for your feedback. We've addressed the issues you reported."
+        ]
+        body = np.random.choice(legitimate_bodies)
+
+        # Add some normal URLs occasionally
+        urls = []
+        if np.random.random() < 0.3:
+            normal_urls = [
+                'https://www.company.com/support',
+                'https://mail.google.com',
+                'https://www.linkedin.com/feed/',
+                'https://www.microsoft.com',
+                'https://www.example.com/page'
+            ]
+            urls = [np.random.choice(normal_urls)]
+
+        data.append({
+            'subject': subject,
+            'sender': sender,
+            'body': body,
+            'urls': urls,
+            'is_phishing': 0  # Legitimate
+        })
+
+    # Phishing emails (label 1)
+    for i in range(num_samples // 2):
+        # Generate a random phishing email
+        fake_domains = ['secure-bank.com', 'account-verify.net', 'paypa1.com',
+                        'amaz0n.com', 'apple-id-verify.org', 'banking-secure.info']
+        phishing_senders = ['security', 'admin', 'support', 'service', 'notification', 'alert']
+
+        sender_name = np.random.choice(phishing_senders)
+        domain = np.random.choice(fake_domains)
+        sender = f"{sender_name}@{domain}"
+
+        # Phishing subjects
+        phishing_subjects = [
+            'URGENT: Your account has been locked',
+            'Security Alert - Immediate Action Required',
+            'Payment declined - Verify your information',
+            'Your account will be suspended',
+            'Verify your information now',
+            '⚠️ Important security notification',
+            'You have won a gift card!',
+            'Document shared with you - Sign in to view',
+            'Invoice #123456 - Payment required'
+        ]
+        subject = np.random.choice(phishing_subjects)
+
+        # Generate phishing body content
+        phishing_bodies = [
+            "Dear valued customer, we've detected unusual activity on your account. Click here to verify your identity and restore access: http://secure-login.info/verify?id=123",
+            "Your account has been limited due to suspicious login attempts. Please update your information immediately: https://banking-secure.net/login",
+            "Warning! Your payment failed and your subscription will be cancelled. Update your payment details here: http://192.168.1.1/payment",
+            "Congratulations! You've been selected to receive a $1000 gift card. Claim now at: http://claim-prize.info",
+            "This is your final notice. Your account will be suspended unless you verify your information within 24 hours: https://verify-now.net",
+            "Your document is ready to view. Sign in with your Microsoft account: http://docs-view.info/signin",
+            "You have 1 pending message from your bank regarding your account security. View now: https://secure-messages.info",
+            "Dear user, your Apple ID was used to sign in on a new device. If this wasn't you, verify your identity here: http://apple-verify.net",
+            "ATTENTION: Your tax refund of $4,329.60 is ready for processing. Submit your details here: http://tax-refund.info"
+        ]
+        body = np.random.choice(phishing_bodies)
+
+        # Add suspicious URLs
+        suspicious_urls = [
+            'http://secure-login.info/verify?id=123',
+            'https://banking-secure.net/login',
+            'http://192.168.1.1/payment',
+            'http://claim-prize.info',
+            'https://verify-now.net',
+            'http://docs-view.info/signin',
+            'https://secure-messages.info',
+            'http://apple-verify.net',
+            'http://tax-refund.info',
+            'https://amaz0n.com/secure-login'
+        ]
+
+        # 1-3 suspicious URLs
+        num_urls = np.random.randint(1, 4)
+        urls = np.random.choice(suspicious_urls, size=num_urls, replace=False).tolist()
+
+        data.append({
+            'subject': subject,
+            'sender': sender,
+            'body': body,
+            'urls': urls,
+            'is_phishing': 1  # Phishing
+        })
+
+    # Convert to DataFrame
+    df = pd.DataFrame(data)
+
+    # Extract features
+    print("Extracting features...")
+    X = detector.extract_features(df)
+    y = df['is_phishing']
+
+    # Train model
+    print("Training model...")
+    results = detector.train_model(X, y)
+
+    # Save model
+    detector.save_model()
+
+    print(f"Model trained successfully! Accuracy: {results['accuracy']:.4f}")
+    return results
+
+
+def main():
+    # Create a splash screen
+    splash_root = tk.Tk()
+    splash_root.overrideredirect(True)  # Remove window decorations
+
+    # Calculate position for center of screen
+    screen_width = splash_root.winfo_screenwidth()
+    screen_height = splash_root.winfo_screenheight()
+    width = 400
+    height = 200
+    x = (screen_width - width) // 2
+    y = (screen_height - height) // 2
+
+    splash_root.geometry(f"{width}x{height}+{x}+{y}")
+
+    # Add a frame with a border
+    splash_frame = tk.Frame(splash_root, bg="#f0f0f0", bd=2, relief=tk.RAISED)
+    splash_frame.pack(fill=tk.BOTH, expand=True)
+
+    # Add title and loading message
+    title_label = tk.Label(splash_frame, text="Phishing Email Detector",
+                           font=("Helvetica", 16, "bold"), bg="#f0f0f0")
+    title_label.pack(pady=(20, 10))
+
+    subtitle_label = tk.Label(splash_frame, text="Machine Learning-based Phishing Detection",
+                              font=("Helvetica", 10), bg="#f0f0f0")
+    subtitle_label.pack()
+
+    loading_label = tk.Label(splash_frame, text="Initializing...", bg="#f0f0f0")
+    loading_label.pack(pady=(20, 0))
+
+    progress = tk.Canvas(splash_frame, width=300, height=20, bg="#f0f0f0", highlightthickness=0)
+    progress.pack(pady=10)
+    progress.create_rectangle(0, 0, 0, 20, fill="#4CAF50", width=0, tags="progress")
+
+    splash_root.update()
+
+    # Define a function to update the progress bar
+    def update_progress(value, message=""):
+        progress.delete("progress")
+        progress.create_rectangle(0, 0, 3 * value, 20, fill="#4CAF50", width=0, tags="progress")
+        if message:
+            loading_label.config(text=message)
+        splash_root.update()
+
+    # Check if model exists
+    if os.path.exists('phishing_detector_model.pkl'):
+        update_progress(30, "Loading existing model...")
+        time.sleep(0.5)
+        update_progress(90, "Model loaded successfully!")
+        time.sleep(0.5)
+    else:
+        update_progress(20, "No existing model found")
+        time.sleep(0.5)
+        update_progress(40, "Creating and training sample model...")
+        time.sleep(0.5)
+        # Don't actually train here; we'll do it after the UI loads
+        update_progress(90, "Preparing application...")
+        time.sleep(0.5)
+
+    update_progress(100, "Starting application...")
+    time.sleep(0.5)
+
+    # Close splash screen and open main app
+    splash_root.destroy()
+
+    # Start main application
+    root = tk.Tk()
+    app = PhishingDetectorUI(root)
+
+    # If no model exists, create and train a demo model
+    if not os.path.exists('phishing_detector_model.pkl'):
+        train_model_thread = threading.Thread(target=simulate_training)
+        train_model_thread.daemon = True
+        train_model_thread.start()
+
+        # Check if training is complete
+        def check_training():
+            if not train_model_thread.is_alive():
+                app.load_existing_model()
+            else:
+                app.status_label.config(text="Status: Creating demo model... Please wait.")
+                root.after(1000, check_training)
+
+        root.after(500, check_training)
+
+    root.mainloop()
+
+
+if __name__ == "__main__":
+    import time
+    import threading
+
+    main()
