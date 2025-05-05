@@ -1,0 +1,1371 @@
+import pandas as pd
+import numpy as np
+import re
+import email
+import email.parser
+import email.header
+from bs4 import BeautifulSoup
+import urllib.parse
+from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.neural_network import MLPClassifier
+from sklearn.svm import SVC
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, precision_recall_curve, roc_curve, auc
+import joblib
+import warnings
+import matplotlib.pyplot as plt
+import seaborn as sns
+import os
+from urllib.parse import urlparse
+import requests
+import dns.resolver
+import socket
+import tldextract
+import datetime
+import base64
+import hashlib
+import ssl
+import whois
+import nltk
+from nltk.sentiment import SentimentIntensityAnalyzer
+from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
+import threading
+import time
+import json
+import itertools
+from collections import Counter
+import ipaddress
+
+# Suppress warnings
+warnings.filterwarnings('ignore')
+
+# Download required NLTK data
+try:
+    nltk.download('vader_lexicon', quiet=True)
+    nltk.download('punkt', quiet=True)
+    nltk.download('stopwords', quiet=True)
+except:
+    pass  # Handle offline situations
+
+
+class PhishingEmailDetector:
+    def __init__(self):
+        self.model = None
+        self.vectorizer = None
+        self.features = None
+        self.model_type = 'rf'  # Default model type
+        self.api_keys = self._load_api_keys()
+        self.suspicious_tlds = [
+            'xyz', 'top', 'club', 'gq', 'ml', 'ga', 'cf', 'tk', 'online', 
+            'site', 'work', 'surf', 'info', 'stream', 'store', 'click'
+        ]
+        self.trusted_domains = [
+            'google.com', 'microsoft.com', 'apple.com', 'amazon.com', 'facebook.com', 
+            'twitter.com', 'linkedin.com', 'paypal.com', 'dropbox.com', 'github.com',
+            'gmail.com', 'outlook.com', 'yahoo.com', 'icloud.com', 'hotmail.com'
+        ]
+        self.domain_reputation_cache = {}  # Cache for domain reputation results
+        
+        # Create sentiment analyzer
+        try:
+            self.sia = SentimentIntensityAnalyzer()
+        except:
+            self.sia = None
+            
+        # Stopwords
+        try:
+            self.stopwords = set(stopwords.words('english'))
+        except:
+            self.stopwords = set()
+        
+        # Initialize the version information and last model training date
+        self.version = "2.0.0"
+        self.last_training_date = None
+        self.model_performance = None
+
+    def _load_api_keys(self):
+        """Load API keys from configuration file if exists"""
+        api_keys = {
+            'virustotal': '',
+            'phishtank': '',
+            'safebrowsing': ''
+        }
+        try:
+            if os.path.exists('config.json'):
+                with open('config.json', 'r') as f:
+                    config = json.load(f)
+                    if 'api_keys' in config:
+                        api_keys.update(config['api_keys'])
+        except:
+            pass
+        return api_keys
+
+    def load_data(self, phishing_path, legitimate_path):
+        """
+        Load phishing and legitimate emails from directories
+        """
+        print("Loading email data...")
+        phishing_emails = self._load_emails_from_dir(phishing_path, label=1)  # 1 for phishing
+        legitimate_emails = self._load_emails_from_dir(legitimate_path, label=0)  # 0 for legitimate
+
+        all_emails = phishing_emails + legitimate_emails
+
+        # Convert to DataFrame
+        df = pd.DataFrame(all_emails)
+        print(f"Loaded {len(df)} emails ({len(phishing_emails)} phishing, {len(legitimate_emails)} legitimate)")
+        return df
+
+    def _load_emails_from_dir(self, directory, label):
+        """
+        Load all emails from a directory and parse them
+        """
+        emails = []
+        if not os.path.exists(directory):
+            print(f"Warning: Directory {directory} does not exist")
+            return emails
+
+        for filename in os.listdir(directory):
+            if not filename.endswith(('.eml', '.txt', '.msg')):
+                continue
+
+            try:
+                filepath = os.path.join(directory, filename)
+                with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
+
+                # Parse email using email.parser
+                parser = email.parser.Parser()
+                msg = parser.parsestr(content)
+
+                # Extract subject, sender, and body
+                subject = msg['subject'] if msg['subject'] else ""
+                sender = msg['from'] if msg['from'] else ""
+                
+                # Extract header information
+                headers = self._extract_headers(msg)
+
+                # Extract email body (handle multipart emails)
+                body_plain, body_html = self._get_email_body(msg)
+                
+                # Full body text
+                body = body_plain + " " + (BeautifulSoup(body_html, 'html.parser').get_text(separator=' ', strip=True) if body_html else "")
+
+                # Extract all URLs from the email body
+                urls = self._extract_urls(body, body_html)
+                
+                # Extract attachments
+                attachments = self._extract_attachments(msg)
+
+                emails.append({
+                    'subject': subject,
+                    'sender': sender,
+                    'body_plain': body_plain,
+                    'body_html': body_html,
+                    'body': body,
+                    'headers': headers,
+                    'urls': urls,
+                    'attachments': attachments,
+                    'is_phishing': label,
+                    'filename': filename
+                })
+            except Exception as e:
+                print(f"Error processing {filename}: {e}")
+
+        return emails
+
+    def _extract_headers(self, msg):
+        """Extract and process email headers"""
+        headers = {}
+        for key in msg.keys():
+            # Decode header value if necessary
+            value = msg[key]
+            if value:
+                try:
+                    decoded_value = email.header.decode_header(value)
+                    value_str = ''
+                    for val, encoding in decoded_value:
+                        if isinstance(val, bytes):
+                            if encoding:
+                                val = val.decode(encoding, errors='replace')
+                            else:
+                                val = val.decode('utf-8', errors='replace')
+                        value_str += val
+                    headers[key.lower()] = value_str
+                except:
+                    headers[key.lower()] = value
+        
+        return headers
+
+    def _get_email_body(self, msg):
+        """
+        Extract plain text and HTML body from an email message object
+        """
+        body_plain = ""
+        body_html = ""
+        
+        if msg.is_multipart():
+            for part in msg.walk():
+                content_type = part.get_content_type()
+                content_disposition = str(part.get("Content-Disposition"))
+
+                # Skip attachments
+                if "attachment" in content_disposition:
+                    continue
+
+                if content_type == "text/plain":
+                    try:
+                        body_part = part.get_payload(decode=True).decode(errors='replace')
+                        body_plain += body_part + " "
+                    except:
+                        pass
+                elif content_type == "text/html":
+                    try:
+                        body_part = part.get_payload(decode=True).decode(errors='replace')
+                        body_html += body_part + " "
+                    except:
+                        pass
+        else:
+            # Not multipart - get the content directly
+            content_type = msg.get_content_type()
+            try:
+                body = msg.get_payload(decode=True).decode(errors='replace')
+                if content_type == "text/html":
+                    body_html = body
+                else:
+                    body_plain = body
+            except:
+                pass
+
+        return body_plain, body_html
+
+    def _extract_attachments(self, msg):
+        """Extract information about email attachments"""
+        attachments = []
+        
+        if msg.is_multipart():
+            for part in msg.walk():
+                if part.get_content_maintype() == 'multipart':
+                    continue
+                
+                if part.get('Content-Disposition') and 'attachment' in part.get('Content-Disposition'):
+                    filename = part.get_filename()
+                    if filename:
+                        # Get file extension and content type
+                        _, ext = os.path.splitext(filename)
+                        content_type = part.get_content_type()
+                        
+                        # Calculate file size
+                        try:
+                            file_content = part.get_payload(decode=True)
+                            file_size = len(file_content) if file_content else 0
+                            
+                            # Calculate hash for unique identification
+                            file_hash = hashlib.md5(file_content).hexdigest() if file_content else None
+                        except:
+                            file_size = 0
+                            file_hash = None
+                        
+                        attachments.append({
+                            'filename': filename,
+                            'extension': ext.lower() if ext else '',
+                            'content_type': content_type,
+                            'size': file_size,
+                            'hash': file_hash
+                        })
+        
+        return attachments
+
+    def _extract_urls(self, text, html=None):
+        """
+        Extract all URLs from the text and HTML
+        """
+        urls = set()
+        
+        # Extract from plain text
+        url_regex = r'https?://[^\s<>"]+|www\.[^\s<>"]+|(?:[a-zA-Z][-a-zA-Z0-9]+\.)+[a-zA-Z0-9]{2,}'
+        text_urls = re.findall(url_regex, text)
+        urls.update(text_urls)
+        
+        # Extract from HTML if available
+        if html:
+            try:
+                soup = BeautifulSoup(html, 'html.parser')
+                # Extract from href attributes
+                for a_tag in soup.find_all('a'):
+                    href = a_tag.get('href')
+                    if href and not href.startswith('#') and not href.startswith('javascript:'):
+                        urls.add(href)
+                
+                # Extract from img src attributes
+                for img_tag in soup.find_all('img'):
+                    src = img_tag.get('src')
+                    if src and not src.startswith('data:'):
+                        urls.add(src)
+                
+                # Extract from form actions
+                for form_tag in soup.find_all('form'):
+                    action = form_tag.get('action')
+                    if action:
+                        urls.add(action)
+            except:
+                pass
+        
+        # Normalize URLs (add http:// prefix if missing)
+        normalized_urls = []
+        for url in urls:
+            if url.startswith('www.') or (re.match(r'^[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+', url) and not url.startswith('http')):
+                url = 'http://' + url
+            normalized_urls.append(url)
+            
+        return normalized_urls
+
+    def extract_features(self, df):
+        """
+        Extract features from the emails dataset
+        """
+        print("Extracting features...")
+        features = pd.DataFrame(index=df.index)
+
+        # Text features using TF-IDF
+        print("Extracting text features...")
+        self.vectorizer = TfidfVectorizer(max_features=1000, 
+                                         stop_words='english', 
+                                         ngram_range=(1, 2),  # Include bigrams
+                                         min_df=5)  # Minimum document frequency
+        
+        # Combine subject and body for text analysis
+        combined_text = df['subject'].fillna('') + ' ' + df['body'].fillna('')
+        text_features = self.vectorizer.fit_transform(combined_text)
+
+        # Convert sparse matrix to DataFrame and add prefix to column names
+        text_df = pd.DataFrame(text_features.toarray())
+        text_df.columns = [f'text_{i}' for i in range(text_df.shape[1])]
+
+        # Email header features
+        print("Extracting header features...")
+        features['has_reply_to'] = df['headers'].apply(lambda x: 1 if 'reply-to' in x else 0)
+        features['has_return_path'] = df['headers'].apply(lambda x: 1 if 'return-path' in x else 0)
+        features['has_message_id'] = df['headers'].apply(lambda x: 1 if 'message-id' in x else 0)
+        features['sender_matches_reply_to'] = df.apply(self._sender_matches_reply_to, axis=1)
+        features['sender_matches_return_path'] = df.apply(self._sender_matches_return_path, axis=1)
+        features['multiple_from_headers'] = df['headers'].apply(lambda x: 1 if x.get('from') and x.get('from').count('@') > 1 else 0)
+        
+        # Basic email metadata features
+        print("Extracting metadata features...")
+        features['subject_length'] = df['subject'].fillna('').apply(len)
+        features['subject_word_count'] = df['subject'].fillna('').apply(lambda x: len(x.split()))
+        features['body_length'] = df['body'].fillna('').apply(len)
+        features['body_word_count'] = df['body'].fillna('').apply(lambda x: len(x.split()))
+        features['body_line_count'] = df['body_plain'].fillna('').apply(lambda x: x.count('\n') + 1)
+        features['html_plain_ratio'] = df.apply(lambda x: len(x['body_html'])/max(1, len(x['body_plain'])) if x['body_plain'] and x['body_html'] else 0, axis=1)
+        features['has_subject'] = df['subject'].fillna('').apply(lambda x: 1 if len(x) > 0 else 0)
+        features['sender_domain'] = df['sender'].fillna('').apply(self._extract_domain)
+        features['has_suspicious_sender_domain'] = features['sender_domain'].apply(self._is_suspicious_domain)
+        features['sender_domain_age_days'] = features['sender_domain'].apply(self._get_domain_age_days)
+        
+        # URL-based features
+        print("Extracting URL features...")
+        features['url_count'] = df['urls'].apply(len)
+        features['unique_url_count'] = df['urls'].apply(lambda x: len(set(x)))
+        features['unique_domain_count'] = df['urls'].apply(self._count_unique_domains)
+        features['has_suspicious_url'] = df['urls'].apply(self._has_suspicious_url)
+        features['has_suspicious_tld'] = df['urls'].apply(self._has_suspicious_tld)
+        features['has_ip_url'] = df['urls'].apply(self._has_ip_url)
+        features['has_shortened_url'] = df['urls'].apply(self._has_shortened_url)
+        features['has_login_url'] = df['urls'].apply(self._has_login_url)
+        features['url_hostname_mismatch'] = df['urls'].apply(self._url_hostname_mismatch)
+        features['max_url_length'] = df['urls'].apply(self._max_url_length)
+        features['avg_url_length'] = df['urls'].apply(self._avg_url_length)
+        
+        # Content-based features
+        print("Extracting content features...")
+        features['contains_urgent_words'] = df['body'].fillna('').apply(self._contains_urgent_words)
+        features['contains_money_words'] = df['body'].fillna('').apply(self._contains_money_words)
+        features['contains_sensitive_words'] = df['body'].fillna('').apply(self._contains_sensitive_words)
+        features['contains_action_words'] = df['body'].fillna('').apply(self._contains_action_words)
+        features['contains_greeting'] = df['body'].fillna('').apply(self._contains_greeting)
+        features['contains_suspicious_codes'] = df['body_html'].fillna('').apply(self._contains_suspicious_code)
+        features['contains_form'] = df['body_html'].fillna('').apply(lambda x: 1 if '<form' in x.lower() else 0)
+        
+        # Sentiment analysis
+        if self.sia:
+            print("Extracting sentiment features...")
+            features['subject_sentiment'] = df['subject'].fillna('').apply(self._get_sentiment_score)
+            features['body_sentiment'] = df['body'].fillna('').apply(self._get_sentiment_score)
+            features['subject_body_sentiment_diff'] = abs(features['subject_sentiment'] - features['body_sentiment'])
+        
+        # Attachment features
+        print("Extracting attachment features...")
+        features['has_attachment'] = df['attachments'].apply(lambda x: 1 if len(x) > 0 else 0)
+        features['attachment_count'] = df['attachments'].apply(len)
+        features['has_executable_attachment'] = df['attachments'].apply(self._has_executable_attachment)
+        features['has_archive_attachment'] = df['attachments'].apply(self._has_archive_attachment)
+        features['has_large_attachment'] = df['attachments'].apply(lambda x: 1 if any(a['size'] > 1000000 for a in x) else 0)  # >1MB
+        
+        # Language and style features
+        features['caps_to_length_ratio'] = df['body'].fillna('').apply(self._get_caps_ratio)
+        features['exclamation_count'] = df['body'].fillna('').apply(lambda x: x.count('!'))
+        features['question_count'] = df['body'].fillna('').apply(lambda x: x.count('?'))
+        features['spelling_error_ratio'] = df['body'].fillna('').apply(self._estimate_spelling_errors)
+        
+        # Convert sender_domain to numeric using one-hot encoding
+        print("Converting categorical features...")
+        # Only use the top 30 most common domains to avoid too many features
+        top_domains = features['sender_domain'].value_counts().nlargest(30).index
+        for domain in top_domains:
+            features[f'domain_{domain}'] = (features['sender_domain'] == domain).astype(int)
+        
+        # Drop the original sender_domain column
+        features = features.drop('sender_domain', axis=1)
+
+        # Combine with text features
+        all_features = pd.concat([features, text_df], axis=1)
+
+        # Handle missing values
+        all_features = all_features.fillna(0)
+
+        self.features = all_features.columns.tolist()
+        print(f"Extracted {len(self.features)} features")
+
+        return all_features
+
+    def _sender_matches_reply_to(self, row):
+        """Check if sender matches reply-to header"""
+        headers = row['headers']
+        sender = row['sender']
+        
+        if not sender or 'reply-to' not in headers:
+            return 0
+            
+        sender_domain = self._extract_domain(sender)
+        reply_to = headers.get('reply-to', '')
+        reply_to_domain = self._extract_domain(reply_to)
+        
+        return 1 if sender_domain == reply_to_domain else 0
+    
+    def _sender_matches_return_path(self, row):
+        """Check if sender matches return-path header"""
+        headers = row['headers']
+        sender = row['sender']
+        
+        if not sender or 'return-path' not in headers:
+            return 0
+            
+        sender_domain = self._extract_domain(sender)
+        return_path = headers.get('return-path', '')
+        return_path_domain = self._extract_domain(return_path)
+        
+        return 1 if sender_domain == return_path_domain else 0
+
+    def _extract_domain(self, email_address):
+        """
+        Extract domain from email address or URL
+        """
+        if not email_address:
+            return "unknown"
+
+        # Check if it's an email address
+        match = re.search(r'@([^@]+)', email_address)
+        if match:
+            return match.group(1).lower()
+        
+        # Check if it's a URL
+        try:
+            extracted = tldextract.extract(email_address)
+            if extracted.domain and extracted.suffix:
+                return f"{extracted.domain}.{extracted.suffix}".lower()
+        except:
+            pass
+            
+        return "unknown"
+
+    def _is_suspicious_domain(self, domain):
+        """Check if domain is suspicious (newly registered or uncommon TLD)"""
+        if domain == "unknown":
+            return 0
+            
+        # Check against trusted domains
+        if domain in self.trusted_domains:
+            return 0
+            
+        # Check if it uses a suspicious TLD
+        extracted = tldextract.extract(domain)
+        if extracted.suffix in self.suspicious_tlds:
+            return 1
+            
+        # Check domain age
+        if self._get_domain_age_days(domain) < 30:  # Less than 30 days old
+            return 1
+            
+        return 0
+        
+    def _get_domain_age_days(self, domain):
+        """Get domain age in days"""
+        if domain == "unknown":
+            return 0
+            
+        try:
+            # Use whois to get domain creation date
+            w = whois.whois(domain)
+            if w.creation_date:
+                if isinstance(w.creation_date, list):
+                    creation_date = w.creation_date[0]
+                else:
+                    creation_date = w.creation_date
+                    
+                days = (datetime.datetime.now() - creation_date).days
+                return max(0, days)  # Ensure non-negative
+        except:
+            pass
+            
+        return 365  # Default to 1 year if we couldn't determine
+        
+    def _count_unique_domains(self, urls):
+        """Count unique domains in a list of URLs"""
+        domains = set()
+        for url in urls:
+            try:
+                extracted = tldextract.extract(url)
+                if extracted.domain and extracted.suffix:
+                    domains.add(f"{extracted.domain}.{extracted.suffix}".lower())
+            except:
+                pass
+        return len(domains)
+
+    def _has_suspicious_url(self, urls):
+        """
+        Check if there are any suspicious URLs
+        """
+        suspicious_patterns = [
+            r'bit\.ly', r'goo\.gl', r'tinyurl\.com', r't\.co', r'lnkd\.in', r'is\.gd',
+            r'login', r'signin', r'account', r'update', r'verify',
+            r'secure', r'banking', r'password', r'confirm', r'verify', r'wallet',
+            r'authorize', r'authenticate', r'recover', r'instagram', r'paypal',
+            r'security', r'mobilebanking'
+        ]
+        pattern = '|'.join(suspicious_patterns)
+
+        for url in urls:
+            if re.search(pattern, url.lower()):
+                return 1
+                
+            # Check for typosquatting (e.g., paypa1.com instead of paypal.com)
+            for trusted_domain in self.trusted_domains:
+                # Skip very short domains to avoid false positives
+                if len(trusted_domain) < 5:
+                    continue
+                
+                domain = self._extract_domain(url)
+                # Check edit distance
+                if domain != trusted_domain and self._similar_strings(domain, trusted_domain):
+                    return 1
+                
+        return 0
+
+    def _similar_strings(self, s1, s2):
+        """Check if strings are similar (potential typosquatting)"""
+        # Simple edit distance check
+        if abs(len(s1) - len(s2)) > 3:
+            return False
+            
+        # Count differences
+        differences = 0
+        for c1, c2 in itertools.zip_longest(s1, s2):
+            if c1 != c2:
+                differences += 1
+                if differences > 2:  # Allow max 2 character differences
+                    return False
+                    
+        return True
+
+    def _has_suspicious_tld(self, urls):
+        """Check if any URL has a suspicious TLD"""
+        for url in urls:
+            try:
+                extracted = tldextract.extract(url)
+                if extracted.suffix in self.suspicious_tlds:
+                    return 1
+            except:
+                pass
+        return 0
+
+    def _has_ip_url(self, urls):
+        """
+        Check if any URL contains an IP address instead of domain name
+        """
+        ip_pattern = r'https?://\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}'
+
+        for url in urls:
+            if re.search(ip_pattern, url.lower()):
+                # Verify it's a valid IP (not something like 999.999.999.999)
+                try:
+                    matches = re.findall(r'(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})', url)
+                    for ip_str in matches:
+                        try:
+                            ipaddress.ip_address(ip_str)
+                            return 1
+                        except:
+                            pass
+                except:
+                    pass
+        return 0
+
+    def _has_shortened_url(self, urls):
+        """Check if any URL is from a URL shortening service"""
+        shorteners = [
+            'bit.ly', 'goo.gl', 'tinyurl.com', 't.co', 'is.gd', 'cli.gs', 
+            'ow.ly', 'buff.ly', 'rebrand.ly', 'soo.gd', 'x.co', 'cutt.ly',
+            'shorturl.at', 'tr.im', 'tiny.cc', 'smarturl.it', 'urlz.fr'
+        ]
+        
+        for url in urls:
+            try:
+                extracted = tldextract.extract(url)
+                domain = f"{extracted.domain}.{extracted.suffix}".lower()
+                if domain in shorteners:
+                    return 1
+            except:
+                pass
+        return 0
+
+    def _has_login_url(self, urls):
+        """Check if any URL contains login/signin/account keywords"""
+        patterns = [
+            r'login', r'signin', r'sign-in', r'account', r'auth',
+            r'password', r'credential', r'profile', r'validate', r'verify'
+        ]
+        pattern = '|'.join(patterns)
+        
+        for url in urls:
+            if re.search(pattern, url.lower()):
+                return 1
+        return 0
+
+    def _url_hostname_mismatch(self, urls):
+        """
+        Check if link text doesn't match the actual URL destination
+        Currently a placeholder as we don't have link text from HTML parsing
+        """
+        # This is a more advanced feature that would require full HTML parsing
+        # and extraction of link text vs href
+        return 0
+
+    def _max_url_length(self, urls):
+        """
+        Get the maximum URL length
+        """
+        if not urls:
+            return 0
+        return max(len(url) for url in urls)
+
+    def _avg_url_length(self, urls):
+        """
+        Get the average URL length
+        """
+        if not urls:
+            return 0
+        return sum(len(url) for url in urls) / len(urls)
+
+    def _contains_urgent_words(self, text):
+        """
+        Check if text contains urgent words often used in phishing
+        """
+        urgent_words = [
+            'urgent', 'immediately', 'alert', 'warning', 'attention',
+            'important', 'verify', 'suspended', 'locked', 'security',
+            'unauthorized', 'limited time', 'expiration', 'expires',
+            'terminate', 'disabled', 'unusual activity', 'suspicious',
+            'compromised', 'breach', 'deadline', 'critical', 'urgent action',
+            'time sensitive', 'act now', 'respond now', 'immediate attention'
+        ]
+        text_lower = text.lower()
+        for word in urgent_words:
+            if word in text_lower:
+                return 1
+        return 0
+
+    def _contains_money_words(self, text):
+        """
+        Check if text contains money-related words often used in phishing
+        """
+        money_words = [
+            'money', 'cash', 'bank', 'credit', 'debit', 'account',
+            'transfer', 'transaction', 'payment', 'fund', 'loan',
+            'dollars', 'euros', 'bitcoin', 'cryptocurrency', 'financial',
+            'invoice', 'bill', 'refund', 'tax', 'deposit', 'wire',
+            'paypal', 'wallet', 'venmo', 'zelle', 'cashapp', 'atm',
+            'investment', 'savings', 'prize', 'winner', 'inheritance'
+        ]
+        text_lower = text.lower()
+        for word in money_words:
+            if word in text_lower:
+                return 1
+        return 0
+
+    def _contains_sensitive_words(self, text):
+        """
+        Check if text contains words related to sensitive information
+        """
+        sensitive_words = [
+            'password', 'username', 'login', 'ssn', 'social security',
+            'credit card', 'cvv', 'pin', 'credentials', 'identity',
+            'personal', 'private', 'confidential', 'tax', 'passport',
+            'license', 'id number', 'date of birth', 'mother\'s maiden',
+            'verification code', 'security question', 'secret', 'authorize',
+            'authentication', 'token', 'otp', 'one-time', 'verification'
+        ]
+        text_lower = text.lower()
+        for word in sensitive_words:
+            if word in text_lower:
+                return 1
+        return 0
+
+    def _contains_action_words(self, text):
+        """
+        Check if text contains action words often used in phishing
+        """
+        action_words = [
+            'click', 'download', 'open', 'confirm', 'verify', 'validate',
+            'update', 'login', 'sign in', 'access', 'provide', 'enter',
+            'submit', 'accept', 'agree', 'approve', 'activate', 'authenticate',
+            'reset', 'change', 'check', 'review', 'complete', 'fill',
+            'upload', 'follow', 'enable', 'install', 'subscribe'
+        ]
+        text_lower = text.lower()
+        for word in action_words:
+            if word in text_lower:
+                return 1
+        return 0
+
+    def _contains_greeting(self, text):
+        """Check if the email contains a personalized greeting"""
+        greeting_patterns = [
+            r'dear\s+\w+', r'hello\s+\w+', r'hi\s+\w+', 
+            r'greetings\s+\w+', r'good\s+(morning|afternoon|evening)\s+\w+'
+        ]
+        
+        for pattern in greeting_patterns:
+            if re.search(pattern, text.lower()):
+                return 1
+        return 0
+
+    def _contains_suspicious_code(self, html):
+        """Check if HTML contains suspicious JavaScript or other code"""
+        if not html:
+            return 0
+            
+        suspicious_patterns = [
+            r'eval\s*\(', r'document\.location\s*=', r'window\.location\s*=',
+            r'document\.cookie', r'document\.write\s*\(', r'style\s*=\s*("|\')display\s*:\s*none',
+            r'<iframe', r'onload\s*=', r'onclick\s*=', r'onmouseover\s*='
+        ]
+        
+        html_lower = html.lower()
+        for pattern in suspicious_patterns:
+            if re.search(pattern, html_lower):
+                return 1
+        return 0
+
+    def _has_executable_attachment(self, attachments):
+        """Check if email has executable file attachments"""
+        suspicious_extensions = ['.exe', '.bat', '.cmd', '.msi', '.vbs', '.js', '.jar', '.pif', '.scr']
+        
+        for attachment in attachments:
+            if any(attachment['extension'].lower().endswith(ext) for ext in suspicious_extensions):
+                return 1
+        return 0
+
+    def _has_archive_attachment(self, attachments):
+        """Check if email has archive file attachments"""
+        archive_extensions = ['.zip', '.rar', '.7z', '.tar', '.gz', '.tgz', '.bz2']
+        
+        for attachment in attachments:
+            if any(attachment['extension'].lower().endswith(ext) for ext in archive_extensions):
+                return 1
+        return 0
+
+    def _get_sentiment_score(self, text):
+        """Get sentiment polarity score (-1 to 1) for text"""
+        if not self.sia or not text:
+            return 0
+            
+        try:
+            sentiment = self.sia.polarity_scores(text)
+            return sentiment['compound']  # Range from -1 (negative) to 1 (positive)
+        except:
+            return 0
+
+    def _get_caps_ratio(self, text):
+        """Calculate ratio of uppercase characters to total length"""
+        if not text:
+            return 0
+            
+        caps_count = sum(1 for c in text if c.isupper())
+        return caps_count / len(text) if len(text) > 0 else 0
+
+    def _estimate_spelling_errors(self, text):
+        """Estimate the ratio of potential spelling errors"""
+        if not text or len(text) < 10:
+            return 0
+            
+        # Simple heuristic based on word length and character distribution
+        words = text.lower().split()
+        unusual_words = 0
+        
+        for word in words:
+            # Skip very short words and words with non-alphabetic characters
+            if len(word) < 4 or not word.isalpha():
+                continue
+                
+            # Skip common words and stopwords
+            if word in self.stopwords:
+                continue
+                
+            # Check for unusual character combinations as a proxy for spelling errors
+            unusual_combos = ['zx', 'qw', 'jk', 'vp', 'xz', 'qt', 'wx']
+            for combo in unusual_combos:
+                if combo in word:
+                    unusual_words += 1
+                    break
+                    
+            # Check for repeated characters (more than 2)
+            if re.search(r'(.)\1{2,}', word):
+                unusual_words += 1
+                
+        # Calculate ratio of unusual words to total words
+        return unusual_words / max(1, len(words))
+
+    def train_model(self, X, y, model_type='rf'):
+        """
+        Train a model with specified algorithm
+        model_type options: 'rf' (Random Forest), 'gb' (Gradient Boosting), 
+                           'nn' (Neural Network), 'svm' (Support Vector Machine)
+        """
+        print(f"Training {model_type} model...")
+        self.model_type = model_type
+        
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42)
+            
+        # Select model based on type
+        if model_type == 'rf':
+            # Random Forest
+            param_grid = {
+                'n_estimators': [100, 200],
+                'max_depth': [10, 15, None],
+                'min_samples_split': [2, 5],
+                'min_samples_leaf': [1, 2]
+            }
+            base_model = RandomForestClassifier(random_state=42, n_jobs=-1)
+            
+        elif model_type == 'gb':
+            # Gradient Boosting
+            param_grid = {
+                'n_estimators': [100, 200],
+                'learning_rate': [0.01, 0.1],
+                'max_depth': [3, 5, 7],
+                'min_samples_split': [2, 5]
+            }
+            base_model = GradientBoostingClassifier(random_state=42)
+            
+        elif model_type == 'nn':
+            # Neural Network
+            param_grid = {
+                'hidden_layer_sizes': [(50,), (100,), (50, 50)],
+                'activation': ['relu', 'tanh'],
+                'alpha': [0.0001, 0.001, 0.01]
+            }
+            base_model = MLPClassifier(random_state=42, max_iter=300)
+            
+        elif model_type == 'svm':
+            # Support Vector Machine
+            param_grid = {
+                'C': [0.1, 1, 10],
+                'kernel': ['linear', 'rbf'],
+                'gamma': ['scale', 'auto']
+            }
+            base_model = SVC(random_state=42, probability=True)
+            
+        else:
+            # Default to Random Forest
+            param_grid = {
+                'n_estimators': [100],
+                'max_depth': [10],
+                'min_samples_split': [2],
+                'min_samples_leaf': [1]
+            }
+            base_model = RandomForestClassifier(random_state=42, n_jobs=-1)
+        
+        # Grid search for best parameters
+        print("Performing grid search for best parameters...")
+        grid_search = GridSearchCV(
+            estimator=base_model,
+            param_grid=param_grid,
+            cv=3,
+            n_jobs=-1,
+            scoring='roc_auc',
+            verbose=1
+        )
+        
+        grid_search.fit(X_train, y_train)
+        
+        # Get best model
+        self.model = grid_search.best_estimator_
+        print(f"Best parameters: {grid_search.best_params_}")
+        
+        # Record training date
+        self.last_training_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Evaluate the model
+        y_pred = self.model.predict(X_test)
+        y_pred_proba = self.model.predict_proba(X_test)[:, 1]
+        
+        # Save performance metrics
+        self.model_performance = {
+            'accuracy': accuracy_score(y_test, y_pred),
+            'classification_report': classification_report(y_test, y_pred, output_dict=True),
+            'confusion_matrix': confusion_matrix(y_test, y_pred).tolist(),
+            'roc_auc': roc_curve(y_test, y_pred_proba),
+            'precision_recall': precision_recall_curve(y_test, y_pred_proba)
+        }
+        
+        print("\nModel Evaluation:")
+        print(f"Accuracy: {self.model_performance['accuracy']:.4f}")
+        print("\nClassification Report:")
+        print(classification_report(y_test, y_pred))
+        
+        # Create and save plots
+        self._create_evaluation_plots(y_test, y_pred, y_pred_proba)
+        
+        # Compute feature importance
+        if hasattr(self.model, 'feature_importances_'):
+            feature_importance = pd.DataFrame({
+                'feature': self.features,
+                'importance': self.model.feature_importances_
+            }).sort_values('importance', ascending=False)
+            
+            print("\nTop 10 Most Important Features:")
+            print(feature_importance.head(10))
+            
+            # Save feature importance
+            self.model_performance['feature_importance'] = feature_importance.to_dict('records')
+            
+            # Create feature importance plot
+            plt.figure(figsize=(10, 8))
+            sns.barplot(x='importance', y='feature', data=feature_importance.head(20))
+            plt.title('Top 20 Feature Importance')
+            plt.tight_layout()
+            plt.savefig('feature_importance.png')
+            
+        # Return results dictionary
+        return {
+            'accuracy': self.model_performance['accuracy'],
+            'classification_report': classification_report(y_test, y_pred),
+            'confusion_matrix': confusion_matrix(y_test, y_pred),
+            'best_params': grid_search.best_params_
+        }
+
+    def _create_evaluation_plots(self, y_test, y_pred, y_pred_proba):
+        """Create and save model evaluation plots"""
+        # Confusion Matrix
+        plt.figure(figsize=(8, 6))
+        cm = confusion_matrix(y_test, y_pred)
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
+                   xticklabels=['Legitimate', 'Phishing'],
+                   yticklabels=['Legitimate', 'Phishing'])
+        plt.xlabel('Predicted')
+        plt.ylabel('Actual')
+        plt.title('Confusion Matrix')
+        plt.savefig('confusion_matrix.png')
+        
+        # ROC Curve
+        plt.figure(figsize=(8, 6))
+        fpr, tpr, _ = roc_curve(y_test, y_pred_proba)
+        roc_auc = auc(fpr, tpr)
+        plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (area = {roc_auc:.2f})')
+        plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+        plt.xlim([0.0, 1.0])
+        plt.ylim([0.0, 1.05])
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title('Receiver Operating Characteristic (ROC) Curve')
+        plt.legend(loc="lower right")
+        plt.savefig('roc_curve.png')
+        
+        # Precision-Recall Curve
+        plt.figure(figsize=(8, 6))
+        precision, recall, _ = precision_recall_curve(y_test, y_pred_proba)
+        pr_auc = auc(recall, precision)
+        plt.plot(recall, precision, color='green', lw=2, label=f'PR curve (area = {pr_auc:.2f})')
+        plt.xlabel('Recall')
+        plt.ylabel('Precision')
+        plt.title('Precision-Recall Curve')
+        plt.legend(loc="lower left")
+        plt.savefig('precision_recall_curve.png')
+
+    def save_model(self, filename='phishing_detector_model.pkl'):
+        """
+        Save the trained model
+        """
+        if self.model is None:
+            print("No model to save")
+            return False
+
+        # Save model, vectorizer, features, and metadata
+        model_data = {
+            'model': self.model,
+            'vectorizer': self.vectorizer,
+            'features': self.features,
+            'model_type': self.model_type,
+            'version': self.version,
+            'trained_date': self.last_training_date,
+            'performance': self.model_performance
+        }
+        
+        joblib.dump(model_data, filename)
+        print(f"Model saved to {filename}")
+        return True
+
+    def load_model(self, filename='phishing_detector_model.pkl'):
+        """
+        Load a trained model
+        """
+        try:
+            data = joblib.load(filename)
+            
+            # Load model and required components
+            self.model = data['model']
+            self.vectorizer = data['vectorizer']
+            self.features = data['features']
+            
+            # Load metadata if available
+            if 'model_type' in data:
+                self.model_type = data['model_type']
+            if 'version' in data:
+                self.version = data['version']
+            if 'trained_date' in data:
+                self.last_training_date = data['trained_date']
+            if 'performance' in data:
+                self.model_performance = data['performance']
+                
+            print(f"Model loaded from {filename}")
+            print(f"Model type: {self.model_type}, Version: {self.version}")
+            if self.last_training_date:
+                print(f"Trained on: {self.last_training_date}")
+            return True
+            
+        except Exception as e:
+            print(f"Error loading model: {str(e)}")
+            return False
+
+    def analyze_single_email(self, email_content):
+        """
+        Analyze a single email and predict if it's phishing
+        """
+        if self.model is None:
+            print("No model loaded")
+            return None
+
+        try:
+            # Parse email
+            parser = email.parser.Parser()
+            msg = parser.parsestr(email_content)
+
+            # Extract subject, sender, and headers
+            subject = msg['subject'] if msg['subject'] else ""
+            sender = msg['from'] if msg['from'] else ""
+            headers = self._extract_headers(msg)
+            
+            # Extract email body
+            body_plain, body_html = self._get_email_body(msg)
+            body = body_plain + " " + (BeautifulSoup(body_html, 'html.parser').get_text(separator=' ', strip=True) if body_html else "")
+            
+            # Extract URLs and attachments
+            urls = self._extract_urls(body, body_html)
+            attachments = self._extract_attachments(msg)
+
+            # Create a DataFrame with a single email
+            df = pd.DataFrame([{
+                'subject': subject,
+                'sender': sender,
+                'body_plain': body_plain,
+                'body_html': body_html,
+                'body': body,
+                'headers': headers,
+                'urls': urls,
+                'attachments': attachments,
+                'is_phishing': 0  # Placeholder
+            }])
+
+            # Extract features (similar to the full feature extraction but for one email)
+            features = pd.DataFrame(index=[0])
+            
+            # Email header features
+            features['has_reply_to'] = 1 if 'reply-to' in headers else 0
+            features['has_return_path'] = 1 if 'return-path' in headers else 0
+            features['has_message_id'] = 1 if 'message-id' in headers else 0
+            
+            sender_domain = self._extract_domain(sender)
+            reply_to = headers.get('reply-to', '')
+            reply_to_domain = self._extract_domain(reply_to)
+            return_path = headers.get('return-path', '')
+            return_path_domain = self._extract_domain(return_path)
+            
+            features['sender_matches_reply_to'] = 1 if sender_domain == reply_to_domain else 0
+            features['sender_matches_return_path'] = 1 if sender_domain == return_path_domain else 0
+            features['multiple_from_headers'] = 1 if sender and sender.count('@') > 1 else 0
+            
+            # Basic email metadata features
+            features['subject_length'] = len(subject) if subject else 0
+            features['subject_word_count'] = len(subject.split()) if subject else 0
+            features['body_length'] = len(body) if body else 0
+            features['body_word_count'] = len(body.split()) if body else 0
+            features['body_line_count'] = (body_plain.count('\n') + 1) if body_plain else 0
+            features['html_plain_ratio'] = len(body_html)/max(1, len(body_plain)) if body_plain and body_html else 0
+            features['has_subject'] = 1 if subject else 0
+            
+            # Domain features
+            features['has_suspicious_sender_domain'] = self._is_suspicious_domain(sender_domain)
+            features['sender_domain_age_days'] = self._get_domain_age_days(sender_domain)
+            
+            # URL-based features
+            features['url_count'] = len(urls)
+            features['unique_url_count'] = len(set(urls))
+            features['unique_domain_count'] = self._count_unique_domains(urls)
+            features['has_suspicious_url'] = self._has_suspicious_url(urls)
+            features['has_suspicious_tld'] = self._has_suspicious_tld(urls)
+            features['has_ip_url'] = self._has_ip_url(urls)
+            features['has_shortened_url'] = self._has_shortened_url(urls)
+            features['has_login_url'] = self._has_login_url(urls)
+            features['url_hostname_mismatch'] = self._url_hostname_mismatch(urls)
+            features['max_url_length'] = self._max_url_length(urls)
+            features['avg_url_length'] = self._avg_url_length(urls)
+            
+            # Content-based features
+            features['contains_urgent_words'] = self._contains_urgent_words(body)
+            features['contains_money_words'] = self._contains_money_words(body)
+            features['contains_sensitive_words'] = self._contains_sensitive_words(body)
+            features['contains_action_words'] = self._contains_action_words(body)
+            features['contains_greeting'] = self._contains_greeting(body)
+            features['contains_suspicious_codes'] = self._contains_suspicious_code(body_html)
+            features['contains_form'] = 1 if body_html and '<form' in body_html.lower() else 0
+            
+            # Sentiment analysis
+            if self.sia:
+                features['subject_sentiment'] = self._get_sentiment_score(subject)
+                features['body_sentiment'] = self._get_sentiment_score(body)
+                features['subject_body_sentiment_diff'] = abs(features['subject_sentiment'].iloc[0] - features['body_sentiment'].iloc[0])
+            
+            # Attachment features
+            features['has_attachment'] = 1 if attachments else 0
+            features['attachment_count'] = len(attachments)
+            features['has_executable_attachment'] = self._has_executable_attachment(attachments)
+            features['has_archive_attachment'] = self._has_archive_attachment(attachments)
+            features['has_large_attachment'] = 1 if any(a['size'] > 1000000 for a in attachments) else 0
+            
+            # Language and style features
+            features['caps_to_length_ratio'] = self._get_caps_ratio(body)
+            features['exclamation_count'] = body.count('!')
+            features['question_count'] = body.count('?')
+            features['spelling_error_ratio'] = self._estimate_spelling_errors(body)
+            
+            # Domain one-hot encoding
+            for feature in self.features:
+                if feature.startswith('domain_'):
+                    domain_name = feature.split('_', 1)[1]
+                    features[feature] = 1 if sender_domain == domain_name else 0
+            
+            # Get text features using the trained vectorizer
+            if self.vectorizer:
+                # Combine subject and body for vectorization
+                combined_text = f"{subject} {body}"
+                text_features = self.vectorizer.transform([combined_text])
+                text_df = pd.DataFrame(text_features.toarray())
+                text_df.columns = [f'text_{i}' for i in range(text_df.shape[1])]
+                
+                # Combine with other features
+                all_features = pd.concat([features, text_df], axis=1)
+                
+                # Ensure all expected features are present
+                for feature in self.features:
+                    if feature not in all_features.columns:
+                        all_features[feature] = 0
+                
+                # Reorder columns to match the training data
+                all_features = all_features[self.features]
+                
+                # Fill any missing values
+                all_features = all_features.fillna(0)
+                
+                # Make prediction
+                prediction = self.model.predict(all_features)[0]
+                probability = self.model.predict_proba(all_features)[0][1]  # Probability of being phishing
+                
+                # Perform real-time URL reputation checks for high-risk emails
+                url_scan_results = []
+                if probability > 0.5 and urls:
+                    # Check a sample of URLs (max 3 to avoid API rate limits)
+                    for url in urls[:3]:
+                        scan_result = self._check_url_reputation(url)
+                        if scan_result:
+                            url_scan_results.append(scan_result)
+                
+                # Get top contributing features
+                # Get feature importance for this specific prediction
+                feature_contribution = {}
+                if hasattr(self.model, 'feature_importances_'):
+                    for i, feature in enumerate(self.features):
+                        feature_contribution[feature] = all_features.iloc[0, i] * self.model.feature_importances_[i]
+                else:
+                    # For models without direct feature_importances_
+                    # Use a simple approach based on feature values
+                    for i, feature in enumerate(self.features):
+                        feature_contribution[feature] = all_features.iloc[0, i]
+
+                # Sort features by contribution
+                sorted_contributions = sorted(
+                    feature_contribution.items(),
+                    key=lambda x: abs(x[1]),
+                    reverse=True
+                )[:10]  # Top 10 contributing features
+                
+                # Extract linked domains for display
+                linked_domains = []
+                for url in urls:
+                    try:
+                        domain = self._extract_domain(url)
+                        if domain not in linked_domains and domain != "unknown":
+                            linked_domains.append(domain)
+                    except:
+                        pass
+                
+                # Create comprehensive result
+                result = {
+                    'is_phishing': bool(prediction),
+                    'probability': probability,
+                    'risk_level': self._get_risk_level(probability),
+                    'subject': subject,
+                    'sender': sender,
+                    'sender_domain': sender_domain,
+                    'reply_to': reply_to,
+                    'return_path': return_path,
+                    'reply_to_mismatch': sender_domain != reply_to_domain if reply_to else False,
+                    'urls': urls[:20],  # Limit to first 20 URLs
+                    'linked_domains': linked_domains,
+                    'url_count': len(urls),
+                    'attachment_count': len(attachments),
+                    'attachments': [a['filename'] for a in attachments],
+                    'has_suspicious_url': bool(features['has_suspicious_url'].iloc[0]),
+                    'has_ip_url': bool(features['has_ip_url'].iloc[0]),
+                    'has_shortened_url': bool(features['has_shortened_url'].iloc[0]),
+                    'contains_urgent_words': bool(features['contains_urgent_words'].iloc[0]),
+                    'contains_money_words': bool(features['contains_money_words'].iloc[0]),
+                    'contains_sensitive_words': bool(features['contains_sensitive_words'].iloc[0]),
+                    'contains_action_words': bool(features['contains_action_words'].iloc[0]),
+                    'contains_suspicious_code': bool(features['contains_suspicious_codes'].iloc[0]),
+                    'has_form': bool(features['contains_form'].iloc[0]),
+                    'top_features': sorted_contributions,
+                    'url_scan_results': url_scan_results,
+                    'analysis_time': datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                }
+                
+                return result
+            else:
+                print("Vectorizer not available")
+                return None
+
+        except Exception as e:
+            print(f"Error analyzing email: {str(e)}")
+            return None
+    
+    def _get_risk_level(self, probability):
+        """Determine risk level based on phishing probability"""
+        if probability < 0.2:
+            return "Low"
+        elif probability < 0.5:
+            return "Medium"
+        elif probability < 0.8:
+            return "High"
+        else:
+            return "Very High"
+    
+    def _check_url_reputation(self, url):
+        """Check URL reputation using APIs"""
+        # Extract domain from URL
+        domain = self._extract_domain(url)
+        
+        # Check cache first
+        if domain in self.domain_reputation_cache:
+            return self.domain_reputation_cache[domain]
+        
+        result = {'url': url, 'domain': domain, 'status': 'unknown', 'details': []}
+        
+        try:
+            # Check Domain Age
+            domain_age = self._get_domain_age_days(domain)
+            if domain_age < 30:
+                result['details'].append(f"Domain was registered recently ({domain_age} days ago)")
+                result['status'] = 'suspicious'
+            
+            # Try to resolve domain
+            try:
+                socket.gethostbyname(domain)
+            except:
+                result['details'].append("Domain cannot be resolved")
+                result['status'] = 'suspicious'
+            
+            # VirusTotal API check (if API key available)
+            if self.api_keys['virustotal']:
+                try:
+                    response = requests.get(
+                        f"https://www.virustotal.com/api/v3/domains/{domain}",
+                        headers={"x-apikey": self.api_keys['virustotal']}
+                    )
+                    if response.status_code == 200:
+                        data = response.json()
+                        if 'data' in data and 'attributes' in data['data']:
+                            reputation = data['data']['attributes'].get('reputation', 0)
+                            if reputation < 0:
+                                result['details'].append(f"Poor reputation score on VirusTotal: {reputation}")
+                                result['status'] = 'malicious'
+                except:
+                    pass
+        except:
+            pass
+        
+        # Cache the result
+        self.domain_reputation_cache[domain] = result
+        return result
+    
+    def get_model_info(self):
+        """Get information about the currently loaded model"""
+        if not self.model:
+            return {
+                'status': 'No model loaded',
+                'version': self.version,
+                'features_count': 0
+            }
+            
+        return {
+            'status': 'Model loaded',
+            'version': self.version,
+            'model_type': self.model_type,
+            'trained_date': self.last_training_date,
+            'features_count': len(self.features) if self.features else 0,
+            'performance': self.model_performance,
+            'top_features': self._get_top_features(10)
+        }
+    
+    def _get_top_features(self, n=10):
+        """Get top n most important features from the model"""
+        if not self.model or not hasattr(self.model, 'feature_importances_') or not self.features:
+            return []
+            
+        feature_importance = pd.DataFrame({
+            'feature': self.features,
+            'importance': self.model.feature_importances_
+        }).sort_values('importance', ascending=False)
+        
+        return feature_importance.head(n).to_dict('records')
