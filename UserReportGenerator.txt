@@ -1,0 +1,85 @@
+package com.example.projectfx;
+
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+import java.util.stream.Collectors;
+
+public class UserReportGenerator {
+    private final User user;
+    private final RecommendationEngine engine;
+
+    public UserReportGenerator(User user, RecommendationEngine engine) {
+        this.user = user;
+        this.engine = engine;
+    }
+
+    public String generateReportContent() {
+        StringBuilder report = new StringBuilder();
+
+        // 1. Header Section
+        report.append("=== USER LEARNING REPORT ===\n")
+                .append("Generated on: ").append(LocalDate.now()).append("\n\n")
+                .append("User ID: ").append(user.getUserID()).append("\n")
+                .append("Name: ").append(user.getName()).append("\n")
+                .append("Email: ").append(user.getEmail()).append("\n")
+                .append("Skill Level: ").append(user.getSkillLevel()).append("\n\n");
+
+        // 2. Course Progress Analysis
+        report.append("=== COURSE PROGRESS ===\n");
+        user.getEnrolledCourseIds().forEach(courseId -> {
+            Course course = engine.getCourseById(courseId);
+            if (course != null) {
+                int progress = user.getCourseProgress(courseId);
+                report.append(String.format("- %s (%s): %d%% complete\n",
+                        course.getTitle(), course.getDifficulty(), progress));
+            }
+        });
+        report.append("\n");
+
+        // 3. Learning Style Analysis
+        report.append("=== LEARNING STYLE ===\n")
+                .append(analyzeLearningStyle()).append("\n\n");
+
+        // 4. Recommendations
+        report.append("=== RECOMMENDED NEXT STEPS ===\n");
+        List<Course> recommendations = engine.generateRecommendations(user.getUserID());
+        if (!recommendations.isEmpty()) {
+            recommendations.stream()
+                    .limit(3)
+                    .forEach(course -> report.append("- ").append(course.getTitle())
+                            .append(" (").append(course.getCategory()).append(")\n"));
+        } else {
+            report.append("Complete more courses to get personalized recommendations\n");
+        }
+
+        return report.toString();
+    }
+
+    private String analyzeLearningStyle() {
+        // Simple analysis based on course categories and progress
+        Map<CourseCategory, Double> categoryHours = new HashMap<>();
+        user.getEnrolledCourseIds().forEach(courseId -> {
+            Course course = engine.getCourseById(courseId);
+            if (course != null) {
+                int progress = user.getCourseProgress(courseId);
+                categoryHours.merge(course.getCategory(),
+                        progress/100.0, Double::sum);
+            }
+        });
+
+        if (categoryHours.isEmpty()) {
+            return "Not enough data to determine learning style";
+        }
+
+        CourseCategory topCategory = Collections.max(
+                categoryHours.entrySet(),
+                Map.Entry.comparingByValue()
+        ).getKey();
+
+        return String.format("Your dominant learning area is %s (%.0f%% of your course time)",
+                topCategory, categoryHours.get(topCategory)*100);
+    }
+}

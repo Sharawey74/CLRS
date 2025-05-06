@@ -1,0 +1,33 @@
+package com.example.projectfx;
+
+import java.io.*;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+
+public class ReportExporter {
+    public static final String REPORTS_DIR = "reports";
+
+    public String exportTextReport(User user, String content) {
+        createReportsDirectory();
+
+        String fileName = String.format("%s/%s_report_%s.txt",
+                REPORTS_DIR,
+                user.getUserID(),
+                LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")));
+
+        try (PrintWriter out = new PrintWriter(fileName)) {
+            out.println(content);
+            return fileName;
+        } catch (FileNotFoundException e) {
+            System.err.println("Error exporting report: " + e.getMessage());
+            return null;
+        }
+    }
+
+    private void createReportsDirectory() {
+        File dir = new File(REPORTS_DIR);
+        if (!dir.exists()) {
+            dir.mkdir();
+        }
+    }
+}
