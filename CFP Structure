@@ -1,0 +1,155 @@
+📁 /frontend/
+🗂️ Pages (HTML/PHP views)
+1.	auth_view.php
+o	UI for login and (optional) registration.
+o	Contains HTML form + includes embedded or linked JS/CSS for validation.
+2.	dashboard_view.php
+o	Unified dashboard for all roles (BranchUser, OPManager, CIO, CEO).
+o	Uses PHP conditionals to show role-specific sections.
+o	Pulls data dynamically using dashboard.js.
+3.	data_view.php
+o	Unified UI for managing:
+	Branches
+	Production
+	Distribution
+	Strategies
+o	Tabs or sections switch between modules.
+o	Uses modal forms for Add/Edit/Delete.
+4.	report_view.php
+o	Visual report page (charts, summaries).
+o	Includes controls for export (PDF/CSV).
+o	Embedded chart canvases and export buttons.
+5.	notifications_view.php
+o	Notification dropdown/modal UI (used globally, can be included as a component).
+o	Shows unread/read states.
+o	Loads via AJAX.
+6.	audit_view.php
+o	Displays audit logs (admin only).
+o	Table format, sortable/filterable.
+7.	404.php
+o	Standard error fallback.
+________________________________________
+🎨 CSS
+1.	main.css
+o	Combines:
+	style.css
+	dashboard.css
+	table.css
+	notifications.css
+o	Structured with sections inside the file (with comments).
+o	Includes media queries for responsive design.
+2.	forms.css All form styles (login, CRUD forms, filters).
+3.	print.css
+o	Standalone for print/export views only.
+________________________________________
+🧠 JavaScript
+1.	main.js
+o	Combines:
+	Crud.js (Combines form validations (validation.js) and AJAX calls for all CRUD operations (branches, production, etc.).
+	dashboard.js
+	charts.js
+	notifications.js
+	utils.js
+2.	•  
+Use DOMContentLoaded or per-page flag to trigger relevant logic.
+•  print_report.js (kept separate for modularity)
+
+✅ Optimized Backend File Structure
+📁 /backend/
+🔐 auth_controller.php
+•	Handles:
+o	Login (POST)
+o	Logout (GET or POST)
+o	Role-based authorization (checkSession(), requireRole())
+•	Functions:
+php
+CopyEdit
+loginUser($email, $password);
+logoutUser();
+checkSession();
+requireRole($roles = []);
+________________________________________
+🧩 dashboard_controller.php
+•	Handles:
+o	Role-based data fetching for the dashboard
+o	Analytics summaries (branch totals, top emitters, etc.)
+•	Functions:
+php
+CopyEdit
+getBranchUserDashboard($userId);
+getManagerDashboard();
+getCioDashboard();
+getCeoDashboard();
+________________________________________
+🗃️ data_controller.php
+•	Handles all CRUD operations for:
+o	Branches
+o	Production
+o	Distribution
+o	Reduction strategies
+•	Functions:
+php
+CopyEdit
+createBranch(), updateBranch(), deleteBranch()
+createProduction(), updateProduction(), deleteProduction()
+...
+________________________________________
+📦 report_controller.php
+•	Handles:
+o	Aggregated queries for reports
+o	JSON output for charts
+o	Export (PDF/CSV)
+•	Functions:
+php
+CopyEdit
+getCityEmissionReport();
+getStrategyROIReport();
+exportPDF();
+exportCSV();
+________________________________________
+🔔 notification_controller.php
+•	Handles:
+o	Insert notification (e.g. on high emission)
+o	Fetch unread/read notifications
+o	Mark as read
+•	Functions:
+php
+CopyEdit
+insertNotification($userId, $message);
+getUserNotifications($userId);
+markAsRead($notificationId);
+________________________________________
+📝 audit_controller.php
+•	Handles:
+o	Insert log entries for any DB change
+o	View logs for admin
+•	Functions:
+php
+CopyEdit
+logAction($userId, $action, $entity, $details);
+getAuditLogs();
+________________________________________
+⚙️ core.php
+•	Handles:
+o	Database connection
+o	Global helper functions
+o	Constants (roles, messages)
+•	Includes:
+php
+CopyEdit
+connectDB();
+getUserById();
+renderJson($data, $status = 200);
+________________________________________
+
+
+✅ Final Backend Summary (Efficient and Consolidated)
+Type	Filename	Purpose
+Controller	auth_controller.php	Login, logout, session, role checks
+Controller	dashboard_controller.php	Role-specific data for dashboard
+Controller	data_controller.php	CRUD for branches, production, distribution, strategies
+Controller	report_controller.php	Chart data, export, aggregated reports
+Controller	notification_controller.php	Send, fetch, mark notifications
+Controller	audit_controller.php	Log all DB changes and retrieve them
+Core	core.php	DB connection, helpers, constants
+
