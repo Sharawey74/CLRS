@@ -1,22 +1,39 @@
 package com.example.projectfx;
 
+import java.awt.*;
 import java.io.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 
 public class ReportExporter {
     public static final String REPORTS_DIR = "reports";
+    private static final DateTimeFormatter TIMESTAMP_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
+    private static final String LOGO_PATH = "resources/logo.png";
 
+    /**
+     * Exports a report in text format
+     * @param user The user for whom the report is generated
+     * @param content The report content
+     * @return The filename of the saved report or null if export failed
+     */
     public String exportTextReport(User user, String content) {
         createReportsDirectory();
 
         String fileName = String.format("%s/%s_report_%s.txt",
                 REPORTS_DIR,
                 user.getUserID(),
-                LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")));
+                LocalDateTime.now().format(TIMESTAMP_FORMAT));
 
         try (PrintWriter out = new PrintWriter(fileName)) {
             out.println(content);
+            System.out.println("Text report successfully exported to: " + fileName);
             return fileName;
         } catch (FileNotFoundException e) {
             System.err.println("Error exporting report: " + e.getMessage());
@@ -24,10 +41,193 @@ public class ReportExporter {
         }
     }
 
+    /**
+     * Exports a report in HTML format with styling
+     * @param user The user for whom the report is generated
+     * @param content The report content in HTML format
+     * @return The filename of the saved report or null if export failed
+     */
+    public String exportHtmlReport(User user, String content) {
+        createReportsDirectory();
+
+        String fileName = String.format("%s/%s_report_%s.html",
+                REPORTS_DIR,
+                user.getUserID(),
+                LocalDateTime.now().format(TIMESTAMP_FORMAT));
+
+        String htmlContent = "<!DOCTYPE html>\n"
+                + "<html>\n"
+                + "<head>\n"
+                + "    <meta charset='UTF-8'>\n"
+                + "    <title>Learning Report for " + user.getName() + "</title>\n"
+                + "    <style>\n"
+                + "        body { font-family: Arial, sans-serif; margin: 40px; }\n"
+                + "        .header { background-color: #4285f4; color: white; padding: 20px; }\n"
+                + "        .section { margin: 20px 0; border: 1px solid #ddd; padding: 15px; border-radius: 5px; }\n"
+                + "        .progress-bar { background-color: #eee; height: 20px; border-radius: 10px; }\n"
+                + "        .progress-fill { background-color: #4285f4; height: 100%; border-radius: 10px; }\n"
+                + "        .recommendation { background-color: #e8f0fe; padding: 10px; margin: 5px 0; }\n"
+                + "    </style>\n"
+                + "</head>\n"
+                + "<body>\n"
+                + content
+                + "</body>\n"
+                + "</html>";
+
+        try (PrintWriter out = new PrintWriter(fileName)) {
+            out.println(htmlContent);
+            System.out.println("HTML report successfully exported to: " + fileName);
+            return fileName;
+        } catch (FileNotFoundException e) {
+            System.err.println("Error exporting HTML report: " + e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Exports a report in PDF format
+     * @param user The user for whom the report is generated
+     * @param content The report content
+     * @return The filename of the saved report or null if export failed
+     */
+    public String exportPdfReport(User user, String content) {
+        createReportsDirectory();
+
+        String fileName = String.format("%s/%s_report_%s.pdf",
+                REPORTS_DIR,
+                user.getUserID(),
+                LocalDateTime.now().format(TIMESTAMP_FORMAT));
+
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage();
+            document.addPage(page);
+
+            try (PDPageContentStream contentStream = new PDPageContentStream(document, page)) {
+                // Add logo if exists
+                if (Files.exists(Paths.get(LOGO_PATH))) {
+                    PDImageXObject logo = PDImageXObject.createFromFile(LOGO_PATH, document);
+                    contentStream.drawImage(logo, 50, 700, 100, 50);
+                }
+
+                // Title
+                contentStream.beginText();
+                contentStream.setFont(PDType1Font.HELVETICA_BOLD, 18);
+                contentStream.newLineAtOffset(50, 750);
+                contentStream.showText("Learning Report for " + user.getName());
+                contentStream.endText();
+
+                // Content - split into lines
+                String[] lines = content.split("\n");
+                float y = 720;
+
+                for (String line : lines) {
+                    if (line.startsWith("===")) {
+                        // Section header
+                        y -= 20;
+                        contentStream.beginText();
+                        contentStream.setFont(PDType1Font.HELVETICA_BOLD, 14);
+                        contentStream.newLineAtOffset(50, y);
+                        contentStream.showText(line.replace("=", "").trim());
+                        contentStream.endText();
+                    } else {
+                        // Regular text
+                        contentStream.beginText();
+                        contentStream.setFont(PDType1Font.HELVETICA, 12);
+                        contentStream.newLineAtOffset(50, y);
+                        contentStream.showText(line);
+                        contentStream.endText();
+                    }
+
+                    y -= 15;
+                    if (y < 50) {
+                        // Create new page if needed
+                        contentStream.close();
+                        PDPage newPage = new PDPage();
+                        document.addPage(newPage);
+                        contentStream.close();
+                        PDPageContentStream newContentStream = new PDPageContentStream(document, newPage);
+                        contentStream.close();
+                        y = 750;
+                    }
+                }
+            }
+
+            document.save(fileName);
+            System.out.println("PDF report successfully exported to: " + fileName);
+            return fileName;
+        } catch (IOException e) {
+            System.err.println("Error exporting PDF report: " + e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Creates the reports directory if it doesn't exist
+     */
     private void createReportsDirectory() {
         File dir = new File(REPORTS_DIR);
         if (!dir.exists()) {
-            dir.mkdir();
+            boolean created = dir.mkdir();
+            if (created) {
+                System.out.println("Reports directory created successfully");
+            } else {
+                System.err.println("Failed to create reports directory");
+            }
         }
+    }
+    /**
+     * Opens a file with the system's default application
+     * @param filePath Path to the file to open
+     * @return true if the file was successfully opened
+     */
+    public boolean openFile(String filePath) {
+        if (filePath == null || !new File(filePath).exists()) {
+            System.err.println("File does not exist: " + filePath);
+            return false;
+        }
+
+        try {
+            File file = new File(filePath);
+            Desktop desktop = Desktop.getDesktop();
+            if (desktop.isSupported(Desktop.Action.OPEN)) {
+                desktop.open(file);
+                return true;
+            } else {
+                System.err.println("Desktop open not supported on this platform");
+                return false;
+            }
+        } catch (IOException e) {
+            System.err.println("Error opening file: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Generates and opens a preview for a report in the specified format
+     * @param user The user for whom the report is generated
+     * @param content The report content
+     * @param format The format to preview ("txt", "html", or "pdf")
+     * @return true if preview was successfully opened
+     */
+    public boolean previewReport(User user, String content, String format) {
+        String filePath = null;
+
+        switch (format.toLowerCase()) {
+            case "txt":
+            case "text":
+                filePath = exportTextReport(user, content);
+                break;
+            case "html":
+                filePath = exportHtmlReport(user, content);
+                break;
+            case "pdf":
+                filePath = exportPdfReport(user, content);
+                break;
+            default:
+                System.err.println("Unsupported format: " + format);
+                return false;
+        }
+
+        return openFile(filePath);
     }
 }
