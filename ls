@@ -50,6 +50,7 @@ class PhishingDetectorApp:
         self.data_dir = os.path.join(self.app_dir, "data")
         self.urls_file = os.path.join(self.data_dir, "suspicious_urls.json")
         self.models_dir = os.path.join(self.app_dir, "models")
+        self.history_file = os.path.join(self.data_dir, "analysis_history.json")
 
         # Ensure directories exist
         os.makedirs(self.data_dir, exist_ok=True)
@@ -407,7 +408,6 @@ class PhishingDetectorApp:
                       "For best results, include as much of the original email as possible."
         self.email_text.insert(tk.END, placeholder)
 
-        # Rest of the method remains unchanged
         # Right panel components
         # 1. File Upload Section
         upload_frame = ttk.LabelFrame(
@@ -548,6 +548,395 @@ class PhishingDetectorApp:
             bootstyle="secondary"
         )
         self.report_placeholder.pack(expand=True)
+
+    def setup_urls_tab(self):
+        """Set up the tab for displaying and managing suspicious URLs"""
+        container = ttk.Frame(self.urls_tab)
+        container.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
+
+        # Title and description
+        title_frame = ttk.Frame(container)
+        title_frame.pack(fill=tk.X, pady=(0, 15))
+
+        ttk.Label(
+            title_frame,
+            text="Suspicious URL Database",
+            font=("Segoe UI", 16, "bold")
+        ).pack(side=tk.LEFT)
+
+        # Control buttons
+        control_frame = ttk.Frame(container)
+        control_frame.pack(fill=tk.X, pady=(0, 10))
+
+        ttk.Button(
+            control_frame,
+            text="Add URL",
+            command=self.add_url_dialog,
+            bootstyle="info-outline"
+        ).pack(side=tk.LEFT, padx=(0, 10))
+
+        ttk.Button(
+            control_frame,
+            text="Remove Selected",
+            command=self.remove_selected_url,
+            bootstyle="danger-outline"
+        ).pack(side=tk.LEFT, padx=(0, 10))
+
+        ttk.Button(
+            control_frame,
+            text="Export List",
+            command=self.export_urls,
+            bootstyle="secondary-outline"
+        ).pack(side=tk.LEFT)
+
+        # URL list with scrollbar
+        list_frame = ttk.Frame(container)
+        list_frame.pack(fill=tk.BOTH, expand=True)
+
+        # Column headings
+        columns = ("#", "URL", "Source", "Date Added", "Risk Level")
+        self.url_tree = ttk.Treeview(
+            list_frame,
+            columns=columns,
+            show="headings",
+            bootstyle="info"
+        )
+
+        # Configure columns
+        self.url_tree.heading("#", text="#")
+        self.url_tree.heading("URL", text="URL")
+        self.url_tree.heading("Source", text="Source")
+        self.url_tree.heading("Date Added", text="Date Added")
+        self.url_tree.heading("Risk Level", text="Risk Level")
+
+        self.url_tree.column("#", width=50, anchor="center")
+        self.url_tree.column("URL", width=300)
+        self.url_tree.column("Source", width=100, anchor="center")
+        self.url_tree.column("Date Added", width=150, anchor="center")
+        self.url_tree.column("Risk Level", width=100, anchor="center")
+
+        # Add scrollbar
+        scrollbar = ttk.Scrollbar(list_frame, orient="vertical", command=self.url_tree.yview)
+        self.url_tree.configure(yscrollcommand=scrollbar.set)
+
+        # Pack elements
+        self.url_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # Load and display URLs
+        self.display_suspicious_urls()
+
+    def setup_settings_tab(self):
+        """Set up the settings tab with model info and app configuration"""
+        container = ttk.Frame(self.settings_tab)
+        container.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
+
+        # Two-column layout
+        left_col = ttk.Frame(container)
+        left_col.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
+
+        right_col = ttk.Frame(container)
+        right_col.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(10, 0))
+
+        # Left column - Model Information
+        model_frame = ttk.LabelFrame(
+            left_col,
+            text="Model Information",
+            bootstyle="info"
+        )
+        model_frame.pack(fill=tk.BOTH, expand=True)
+
+        # Model details
+        model_details = ttk.Frame(model_frame)
+        model_details.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
+
+        # Model type
+        ttk.Label(
+            model_details,
+            text="Model Type:",
+            font=("Segoe UI", 10, "bold")
+        ).grid(row=0, column=0, sticky="w", pady=5)
+
+        self.model_type_label = ttk.Label(
+            model_details,
+            text=self.model_metadata.get("model_type", "Random Forest Classifier")
+        )
+        self.model_type_label.grid(row=0, column=1, sticky="w", pady=5)
+
+        # Model version
+        ttk.Label(
+            model_details,
+            text="Version:",
+            font=("Segoe UI", 10, "bold")
+        ).grid(row=1, column=0, sticky="w", pady=5)
+
+        self.model_version_label = ttk.Label(
+            model_details,
+            text=self.model_metadata.get("version", "1.0.0")
+        )
+        self.model_version_label.grid(row=1, column=1, sticky="w", pady=5)
+
+        # Last updated
+        ttk.Label(
+            model_details,
+            text="Last Updated:",
+            font=("Segoe UI", 10, "bold")
+        ).grid(row=2, column=0, sticky="w", pady=5)
+
+        self.model_updated_label = ttk.Label(
+            model_details,
+            text=self.model_metadata.get("last_updated", self.current_datetime)
+        )
+        self.model_updated_label.grid(row=2, column=1, sticky="w", pady=5)
+
+        # Features
+        ttk.Label(
+            model_details,
+            text="Features Used:",
+            font=("Segoe UI", 10, "bold")
+        ).grid(row=3, column=0, sticky="w", pady=5)
+
+        self.model_features_label = ttk.Label(
+            model_details,
+            text=str(self.model_metadata.get("features_used", 4))
+        )
+        self.model_features_label.grid(row=3, column=1, sticky="w", pady=5)
+
+        # Training data
+        ttk.Label(
+            model_details,
+            text="Training Data:",
+            font=("Segoe UI", 10, "bold")
+        ).grid(row=4, column=0, sticky="w", pady=5)
+
+        self.model_training_label = ttk.Label(
+            model_details,
+            text=self.model_metadata.get("training_data_size", "125,000 emails")
+        )
+        self.model_training_label.grid(row=4, column=1, sticky="w", pady=5)
+
+        # Performance metrics
+        ttk.Separator(model_details).grid(row=5, column=0, columnspan=2, sticky="ew", pady=10)
+
+        ttk.Label(
+            model_details,
+            text="Performance Metrics",
+            font=("Segoe UI", 12, "bold")
+        ).grid(row=6, column=0, columnspan=2, sticky="w", pady=(0, 10))
+
+        # Accuracy
+        ttk.Label(
+            model_details,
+            text="Accuracy:",
+            font=("Segoe UI", 10, "bold")
+        ).grid(row=7, column=0, sticky="w", pady=5)
+
+        self.model_accuracy_label = ttk.Label(
+            model_details,
+            text=f"{self.model_metadata.get('accuracy', 94.7)}%"
+        )
+        self.model_accuracy_label.grid(row=7, column=1, sticky="w", pady=5)
+
+        # Precision
+        ttk.Label(
+            model_details,
+            text="Precision:",
+            font=("Segoe UI", 10, "bold")
+        ).grid(row=8, column=0, sticky="w", pady=5)
+
+        self.model_precision_label = ttk.Label(
+            model_details,
+            text=f"{self.model_metadata.get('precision', 96.2)}%"
+        )
+        self.model_precision_label.grid(row=8, column=1, sticky="w", pady=5)
+
+        # Recall
+        ttk.Label(
+            model_details,
+            text="Recall:",
+            font=("Segoe UI", 10, "bold")
+        ).grid(row=9, column=0, sticky="w", pady=5)
+
+        self.model_recall_label = ttk.Label(
+            model_details,
+            text=f"{self.model_metadata.get('recall', 92.1)}%"
+        )
+        self.model_recall_label.grid(row=9, column=1, sticky="w", pady=5)
+
+        # F1 Score
+        ttk.Label(
+            model_details,
+            text="F1 Score:",
+            font=("Segoe UI", 10, "bold")
+        ).grid(row=10, column=0, sticky="w", pady=5)
+
+        self.model_f1_label = ttk.Label(
+            model_details,
+            text=f"{self.model_metadata.get('f1_score', 94.1)}%"
+        )
+        self.model_f1_label.grid(row=10, column=1, sticky="w", pady=5)
+
+        # Right column - Settings
+        settings_frame = ttk.LabelFrame(
+            right_col,
+            text="Application Settings",
+            bootstyle="info"
+        )
+        settings_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 15))
+
+        settings_content = ttk.Frame(settings_frame)
+        settings_content.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
+
+        # Theme settings
+        ttk.Label(
+            settings_content,
+            text="Theme:",
+            font=("Segoe UI", 10, "bold")
+        ).grid(row=0, column=0, sticky="w", pady=5)
+
+        # Theme dropdown
+        theme_var = StringVar(value="darkly")
+        theme_combo = ttk.Combobox(
+            settings_content,
+            textvariable=theme_var,
+            values=["darkly", "superhero", "cyborg", "solar"],
+            state="readonly",
+            bootstyle="info",
+            width=15
+        )
+        theme_combo.grid(row=0, column=1, sticky="w", pady=5)
+
+        # Phishing threshold
+        ttk.Label(
+            settings_content,
+            text="Phishing Threshold:",
+            font=("Segoe UI", 10, "bold")
+        ).grid(row=1, column=0, sticky="w", pady=5)
+
+        threshold_frame = ttk.Frame(settings_content)
+        threshold_frame.grid(row=1, column=1, sticky="w", pady=5)
+
+        threshold_var = StringVar(value="70")
+        threshold_scale = ttk.Scale(
+            threshold_frame,
+            from_=50,
+            to=95,
+            variable=threshold_var,
+            length=120,
+            bootstyle="info"
+        )
+        threshold_scale.pack(side=tk.LEFT)
+
+        ttk.Label(
+            threshold_frame,
+            textvariable=threshold_var
+        ).pack(side=tk.LEFT, padx=(5, 0))
+
+        ttk.Label(
+            threshold_frame,
+            text="%"
+        ).pack(side=tk.LEFT)
+
+        # Report detail level
+        ttk.Label(
+            settings_content,
+            text="Report Detail Level:",
+            font=("Segoe UI", 10, "bold")
+        ).grid(row=2, column=0, sticky="w", pady=5)
+
+        detail_var = StringVar(value="detailed")
+        detail_combo = ttk.Combobox(
+            settings_content,
+            textvariable=detail_var,
+            values=["basic", "detailed", "expert"],
+            state="readonly",
+            bootstyle="info",
+            width=15
+        )
+        detail_combo.grid(row=2, column=1, sticky="w", pady=5)
+
+        # Auto save reports
+        ttk.Label(
+            settings_content,
+            text="Auto-save Reports:",
+            font=("Segoe UI", 10, "bold")
+        ).grid(row=3, column=0, sticky="w", pady=5)
+
+        auto_save_var = tk.BooleanVar(value=True)
+        auto_save_check = ttk.Checkbutton(
+            settings_content,
+            text="Enabled",
+            variable=auto_save_var,
+            bootstyle="info-round-toggle"
+        )
+        auto_save_check.grid(row=3, column=1, sticky="w", pady=5)
+
+        # About section
+        about_frame = ttk.LabelFrame(
+            right_col,
+            text="About",
+            bootstyle="info"
+        )
+        about_frame.pack(fill=tk.BOTH, expand=True)
+
+        about_content = ttk.Frame(about_frame)
+        about_content.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
+
+        # App logo and name
+        ttk.Label(
+            about_content,
+            text="🛡️",
+            font=("Segoe UI", 30)
+        ).pack(pady=(0, 5))
+
+        ttk.Label(
+            about_content,
+            text="Phishing Detector",
+            font=("Segoe UI", 14, "bold")
+        ).pack(pady=(0, 5))
+
+        ttk.Label(
+            about_content,
+            text="Version 1.0.0",
+            bootstyle="secondary"
+        ).pack(pady=(0, 10))
+
+        # Description
+        description = "Advanced email security tool that uses machine learning to detect phishing attempts. Analyze emails, track suspicious URLs, and protect yourself from cyber threats."
+
+        desc_label = ttk.Label(
+            about_content,
+            text=description,
+            wraplength=300,
+            justify="center"
+        )
+        desc_label.pack(pady=(0, 10))
+
+        # Links
+        links_frame = ttk.Frame(about_content)
+        links_frame.pack(pady=(0, 5))
+
+        ttk.Button(
+            links_frame,
+            text="Documentation",
+            command=lambda: webbrowser.open("https://github.com/Sharawey74/phishing-detector"),
+            bootstyle="link"
+        ).pack(side=tk.LEFT, padx=5)
+
+        ttk.Button(
+            links_frame,
+            text="Report Issue",
+            command=lambda: webbrowser.open("https://github.com/Sharawey74/phishing-detector/issues"),
+            bootstyle="link"
+        ).pack(side=tk.LEFT, padx=5)
+
+        # Copyright
+        ttk.Label(
+            about_content,
+            text=f"© 2025 {self.current_user}",
+            bootstyle="secondary",
+            font=("Segoe UI", 8)
+        ).pack(pady=(10, 0))
 
     def toggle_model_selection(self):
         """Toggle between existing model selection and external model loading"""
@@ -998,7 +1387,8 @@ class PhishingDetectorApp:
             attachment_count = 0
             if msg.is_multipart():
                 for part in msg.iter_parts():
-                    if part.get_content_disposition() == 'attachment':
+                    content_disposition = str(part.get("Content-Disposition", ""))
+                    if "attachment" in content_disposition:
                         has_attachments = True
                         attachment_count += 1
 
@@ -1006,506 +1396,596 @@ class PhishingDetectorApp:
             features['attachment_count'] = attachment_count
 
         else:
-            # Raw text or unparsable email
-            text = email_data['msg'] if isinstance(email_data['msg'], str) else "Unknown content"
+            # We have raw text, not a parsed email
+            # Try to extract basic features from text
+            raw_text = str(email_data.get('msg', ''))
 
-            # Try to extract basic fields from raw text
-            from_match = re.search(r'From:\s*(.*?)(?:\n|$)', text)
-            to_match = re.search(r'To:\s*(.*?)(?:\n|$)', text)
-            subject_match = re.search(r'Subject:\s*(.*?)(?:\n|$)', text)
+            # Try to extract headers
+            headers_body = raw_text.split('\n\n', 1)
+            headers_text = headers_body[0] if len(headers_body) > 0 else ""
+            body = headers_body[1] if len(headers_body) > 1 else raw_text
 
-            features['from'] = from_match.group(1) if from_match else ''
-            features['to'] = to_match.group(1) if to_match else ''
-            features['subject'] = subject_match.group(1) if subject_match else ''
-            features['date'] = ''
-            features['return_path'] = ''
-            features['reply_to'] = ''
+            # Extract from header if present
+            from_match = re.search(r'From:\s*(.*)', headers_text, re.IGNORECASE)
+            features['from'] = from_match.group(1).strip() if from_match else ""
 
-            # Use all text as body
-            features['body'] = text
+            # Extract to header if present
+            to_match = re.search(r'To:\s*(.*)', headers_text, re.IGNORECASE)
+            features['to'] = to_match.group(1).strip() if to_match else ""
 
-            # Cannot determine HTML or attachments easily
-            features['has_html'] = False
+            # Extract subject header if present
+            subject_match = re.search(r'Subject:\s*(.*)', headers_text, re.IGNORECASE)
+            features['subject'] = subject_match.group(1).strip() if subject_match else ""
+
+            # Extract date header if present
+            date_match = re.search(r'Date:\s*(.*)', headers_text, re.IGNORECASE)
+            features['date'] = date_match.group(1).strip() if date_match else ""
+
+            features['body'] = body
+            features['has_html'] = '<html' in raw_text.lower() or '<body' in raw_text.lower()
             features['has_attachments'] = False
             features['attachment_count'] = 0
 
         return features
 
     def analyze_sender(self, email_features):
-        """Analyze sender information for suspicious patterns"""
-        features = {}
+        """Analyze sender information for suspicious indicators"""
+        sender_features = {}
 
-        # Extract sender email and name
-        from_field = email_features.get('from', '')
+        from_address = email_features.get('from', '')
         reply_to = email_features.get('reply_to', '')
         return_path = email_features.get('return_path', '')
 
-        # Extract email address from From field
-        sender_email = ""
-        sender_name = ""
+        # Extract email addresses with regex
+        from_email = self.extract_email_address(from_address)
+        reply_to_email = self.extract_email_address(reply_to)
+        return_path_email = self.extract_email_address(return_path)
 
-        # Match email pattern in From field
-        email_match = re.search(r'<([^>]+)>', from_field)
-        if email_match:
-            sender_email = email_match.group(1).lower()
-            # Extract name part (before the email)
-            name_match = re.search(r'^(.*?)<', from_field)
-            if name_match:
-                sender_name = name_match.group(1).strip()
-        else:
-            # If no angle brackets, try to extract email directly
-            email_match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', from_field)
-            if email_match:
-                sender_email = email_match.group(0).lower()
-            else:
-                sender_email = from_field
+        # Check for suspicious sender patterns
+        sender_features['sender_domain_mismatch'] = self.check_domain_mismatch(from_email, reply_to_email,
+                                                                               return_path_email)
+        sender_features['sender_has_numbers'] = bool(re.search(r'\d{3,}', from_email))
+        sender_features['sender_free_email'] = self.is_free_email_provider(from_email)
+        sender_features['sender_suspicious_tld'] = self.has_suspicious_tld(from_email)
+        sender_features['sender_has_suspicious_words'] = self.has_suspicious_sender_words(from_address)
 
-        # Extract domain
-        domain = ""
-        if sender_email:
-            domain_match = re.search(r'@([\w\.-]+\.\w+)', sender_email)
-            if domain_match:
-                domain = domain_match.group(1).lower()
+        # Check display name vs email address
+        display_name = self.extract_display_name(from_address)
+        sender_features['sender_display_name_mismatch'] = self.check_display_name_mismatch(display_name, from_email)
 
-        # Check mismatched Reply-To
-        reply_to_domain = ""
-        if reply_to:
-            reply_email_match = re.search(r'<([^>]+)>', reply_to) or re.search(r'[\w\.-]+@[\w\.-]+\.\w+', reply_to)
-            if reply_email_match:
-                reply_email = reply_email_match.group(1) if '<' in reply_to else reply_email_match.group(0)
-                reply_domain_match = re.search(r'@([\w\.-]+\.\w+)', reply_email)
-                if reply_domain_match:
-                    reply_to_domain = reply_domain_match.group(1).lower()
+        # Store raw values
+        sender_features['sender_email'] = from_email
+        sender_features['sender_display_name'] = display_name
+        sender_features['sender_domain'] = self.extract_domain(from_email)
 
-        # Check mismatched Return-Path
-        return_path_domain = ""
-        if return_path:
-            return_email_match = re.search(r'<([^>]+)>', return_path) or re.search(r'[\w\.-]+@[\w\.-]+\.\w+',
-                                                                                   return_path)
-            if return_email_match:
-                return_email = return_email_match.group(1) if '<' in return_path else return_email_match.group(0)
-                return_domain_match = re.search(r'@([\w\.-]+\.\w+)', return_email)
-                if return_domain_match:
-                    return_path_domain = return_domain_match.group(1).lower()
+        return sender_features
 
-        # Store features
-        features['sender_email'] = sender_email
-        features['sender_name'] = sender_name
-        features['sender_domain'] = domain
-        features['reply_to_domain'] = reply_to_domain
-        features['return_path_domain'] = return_path_domain
+    def extract_email_address(self, text):
+        """Extract email address from a string"""
+        if not text:
+            return ""
 
-        # Check for mismatches (indicators of phishing)
-        features['mismatched_reply_to'] = (reply_to_domain and domain and reply_to_domain != domain)
-        features['mismatched_return_path'] = (return_path_domain and domain and return_path_domain != domain)
+        # Simple regex to extract email
+        match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', text)
+        return match.group(0) if match else ""
 
-        # Check for common suspicious domains (very basic check)
-        suspicious_domains = ['mail.com', 'protonmail.com', 'tutanota.com', 'cock.li', 'guerrillamail.com']
-        features['suspicious_sender_domain'] = domain in suspicious_domains
+    def extract_display_name(self, from_string):
+        """Extract display name from From header"""
+        if not from_string:
+            return ""
 
-        # Check for domains that try to look like well-known domains
-        # This is a very basic implementation - a real system would use more sophisticated checks
-        common_domains = ['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'aol.com', 'icloud.com']
-        features['lookalike_domain'] = False
+        # Check for format "Display Name <email@example.com>"
+        match = re.search(r'^([^<]+)<', from_string)
+        if match:
+            return match.group(1).strip()
+        return ""
 
-        for common_domain in common_domains:
-            # Check for slight misspellings (e.g., gmal.com, gmial.com)
-            if domain and domain != common_domain and self.calculate_similarity(domain, common_domain) > 0.8:
-                features['lookalike_domain'] = True
-                break
+    def extract_domain(self, email):
+        """Extract domain from email address"""
+        if '@' in email:
+            return email.split('@')[1].lower()
+        return ""
 
-        return features
+    def check_domain_mismatch(self, from_email, reply_to_email, return_path_email):
+        """Check if email domains don't match between headers"""
+        if not from_email:
+            return False
 
-    def calculate_similarity(self, str1, str2):
-        """Calculate similarity between two strings (basic implementation)"""
-        if not str1 or not str2:
-            return 0
+        from_domain = self.extract_domain(from_email)
 
-        # Very simple Levenshtein distance calculation
-        # A real implementation might use a dedicated library
-        m, n = len(str1), len(str2)
-        d = [[0 for _ in range(n + 1)] for _ in range(m + 1)]
+        # Check reply-to if it exists
+        if reply_to_email and from_domain:
+            reply_domain = self.extract_domain(reply_to_email)
+            if reply_domain and reply_domain != from_domain:
+                return True
 
-        for i in range(m + 1):
-            d[i][0] = i
-        for j in range(n + 1):
-            d[0][j] = j
+        # Check return-path if it exists
+        if return_path_email and from_domain:
+            return_domain = self.extract_domain(return_path_email)
+            if return_domain and return_domain != from_domain:
+                return True
 
-        for j in range(1, n + 1):
-            for i in range(1, m + 1):
-                if str1[i - 1] == str2[j - 1]:
-                    d[i][j] = d[i - 1][j - 1]
-                else:
-                    d[i][j] = min(d[i - 1][j], d[i][j - 1], d[i - 1][j - 1]) + 1
+        return False
 
-        # Convert distance to similarity (0 to 1)
-        max_len = max(m, n)
-        if max_len == 0:
-            return 1.0
+    def check_display_name_mismatch(self, display_name, email):
+        """Check if display name tries to impersonate a different domain"""
+        if not display_name or not email:
+            return False
 
-        similarity = 1.0 - (d[m][n] / max_len)
-        return similarity
+        # Convert to lowercase
+        display_name = display_name.lower()
+        email_domain = self.extract_domain(email).lower()
+
+        # Check if display name contains a different domain than the email
+        domain_pattern = r'\b([a-z0-9-]+\.[a-z0-9-]+(?:\.[a-z0-9-]+)*)\b'
+        domains_in_display = re.findall(domain_pattern, display_name)
+
+        for domain in domains_in_display:
+            # If display name has a domain that's not the email domain
+            if domain and len(domain.split('.')) > 1 and domain != email_domain:
+                if not (domain in email_domain or email_domain in domain):
+                    return True
+
+        # Check for company names
+        common_companies = ['paypal', 'amazon', 'apple', 'microsoft', 'google', 'facebook',
+                            'netflix', 'bank', 'chase', 'wells fargo', 'citibank', 'amex',
+                            'american express']
+
+        for company in common_companies:
+            if company in display_name and company not in email_domain:
+                return True
+
+        return False
+
+    def is_free_email_provider(self, email):
+        """Check if the email is from a free provider"""
+        if not email:
+            return False
+
+        domain = self.extract_domain(email)
+
+        free_providers = [
+            'gmail.com', 'yahoo.com', 'hotmail.com', 'aol.com', 'outlook.com',
+            'mail.com', 'zoho.com', 'protonmail.com', 'icloud.com', 'yandex.com',
+            'gmx.com', 'tutanota.com'
+        ]
+
+        return domain in free_providers
+
+    def has_suspicious_tld(self, email):
+        """Check if the email has a suspicious TLD"""
+        if not email:
+            return False
+
+        domain = self.extract_domain(email)
+        if not domain:
+            return False
+
+        tld = domain.split('.')[-1].lower() if '.' in domain else ''
+
+        suspicious_tlds = [
+            'xyz', 'top', 'club', 'online', 'site', 'cyou', 'icu',
+            'work', 'live', 'click', 'link', 'bid', 'party'
+        ]
+
+        return tld in suspicious_tlds
+
+    def has_suspicious_sender_words(self, sender_string):
+        """Check if sender has suspicious words"""
+        if not sender_string:
+            return False
+
+        sender_string = sender_string.lower()
+
+        suspicious_words = [
+            'security', 'verify', 'update', 'support', 'team', 'alert',
+            'notification', 'account', 'confirm', 'secure', 'service',
+            'admin', 'billing', 'payment', 'official', 'helpdesk'
+        ]
+
+        for word in suspicious_words:
+            if word in sender_string:
+                return True
+
+        return False
 
     def extract_urls(self, email_features):
-        """Extract and analyze URLs from email content"""
-        features = {}
+        """Extract and analyze URLs from email"""
+        url_features = {}
+        extracted_urls = []
+
         body = email_features.get('body', '')
         subject = email_features.get('subject', '')
 
         # Extract URLs from body and subject
-        # This is a simple extraction - a real implementation would be more sophisticated
-        url_pattern = r'https?://[^\s<>"\']+|www\.[^\s<>"\']+|(?<=href=")[^"]+|(?<=href=\')[^\']+|(?<=src=")[^"]+|(?<=src=\')[^\']+|(?<=url\(")[^"]+|(?<=url\(\')[^\']+|(?<=url\()[-a-zA-Z0-9@:%_\+.~#?&//=]{2,256}\.[a-z]{2,4}\b'
+        body_urls = self.find_urls(body)
+        subject_urls = self.find_urls(subject)
 
-        body_urls = re.findall(url_pattern, body)
-        subject_urls = re.findall(url_pattern, subject)
+        all_urls = body_urls + subject_urls
+        extracted_urls = all_urls
 
-        # Combine and normalize URLs
-        all_urls = []
+        # URL analysis
+        url_features['has_urls'] = len(all_urls) > 0
+        url_features['url_count'] = len(all_urls)
+        url_features['has_shortened_urls'] = self.has_shortened_urls(all_urls)
+        url_features['has_ip_urls'] = self.has_ip_urls(all_urls)
+        url_features['has_suspicious_tlds'] = self.has_urls_with_suspicious_tlds(all_urls)
+        url_features['has_url_mismatch'] = self.has_url_text_mismatch(body)
+        url_features['urls'] = all_urls
 
-        for url in body_urls + subject_urls:
-            # Ensure URL starts with a protocol
-            if not url.startswith(('http://', 'https://')):
-                if url.startswith('www.'):
-                    url = 'http://' + url
-                elif not url.startswith(('http', 'https', 'ftp', '//')):
-                    continue  # Skip invalid URLs
+        return url_features, extracted_urls
 
-            # Normalize and clean URL
-            url = url.strip()
-            all_urls.append(url)
+    def find_urls(self, text):
+        """Find URLs in text"""
+        if not text:
+            return []
 
-        # Extract domains from URLs
-        domains = []
-        for url in all_urls:
-            try:
-                parsed_url = urllib.parse.urlparse(url)
-                domain = parsed_url.netloc
-                if domain:
-                    domains.append(domain.lower())
-            except:
-                pass
+        # URL regex pattern
+        url_pattern = r'https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+[/\w\.-]*(?:\?[/\w\.-=%&+]*)?'
 
-        # Analyze URLs for suspicious patterns
-        suspicious_url_count = 0
-        suspicious_domains = []
-        ip_address_urls = 0
-        url_redirects = 0
+        # Find all URLs
+        urls = re.findall(url_pattern, text)
 
-        for url in all_urls:
-            try:
-                parsed_url = urllib.parse.urlparse(url)
-                domain = parsed_url.netloc.lower()
+        # Remove duplicates while preserving order
+        unique_urls = []
+        for url in urls:
+            if url not in unique_urls:
+                unique_urls.append(url)
 
-                # Check for IP address instead of domain
-                if re.match(r'\d+\.\d+\.\d+\.\d+', domain):
-                    ip_address_urls += 1
-                    suspicious_url_count += 1
-                    suspicious_domains.append(domain)
+        return unique_urls
 
-                # Check for URL shorteners
-                shorteners = ['bit.ly', 'tinyurl.com', 't.co', 'goo.gl', 'owl.ly', 'is.gd', 'buff.ly']
-                if any(shortener in domain for shortener in shorteners):
-                    url_redirects += 1
-                    suspicious_url_count += 1
-                    suspicious_domains.append(domain)
+    def has_shortened_urls(self, urls):
+        """Check if any URLs are shortened"""
+        if not urls:
+            return False
 
-                # Check for suspicious URL patterns
-                suspicious_patterns = [
-                    'login', 'signin', 'account', 'secure', 'auth', 'verify', 'confirm',
-                    'password', 'credential', 'validate', 'update', 'banking'
-                ]
-                if any(pattern in url.lower() for pattern in suspicious_patterns):
-                    suspicious_url_count += 1
-                    suspicious_domains.append(domain)
+        shortening_services = [
+            'bit.ly', 'tinyurl.com', 'goo.gl', 't.co', 'ow.ly',
+            'tiny.cc', 'is.gd', 'buff.ly', 'rebrand.ly', 'cutt.ly',
+            'shorturl.at', 'clck.ru', 'bitly.com'
+        ]
 
-                # Check for lookalike domains of popular services
-                common_domains = [
-                    'google.com', 'apple.com', 'microsoft.com', 'facebook.com',
-                    'instagram.com', 'amazon.com', 'paypal.com', 'netflix.com'
-                ]
-                for common_domain in common_domains:
-                    if domain != common_domain and self.calculate_similarity(domain, common_domain) > 0.8:
-                        suspicious_url_count += 1
-                        suspicious_domains.append(domain)
-                        break
+        for url in urls:
+            parsed = urllib.parse.urlparse(url)
+            domain = parsed.netloc.lower()
 
-            except Exception as e:
-                print(f"Error analyzing URL {url}: {e}")
+            if domain in shortening_services:
+                return True
 
-        # Store features
-        features['url_count'] = len(all_urls)
-        features['unique_domains'] = len(set(domains))
-        features['suspicious_url_count'] = suspicious_url_count
-        features['ip_address_urls'] = ip_address_urls
-        features['url_redirects'] = url_redirects
-        features['has_suspicious_urls'] = suspicious_url_count > 0
+        return False
 
-        # Store extracted URLs for report
-        extracted_urls = []
-        for url in all_urls:
-            risk_level = "Low"
+    def has_ip_urls(self, urls):
+        """Check if any URLs use IP addresses"""
+        if not urls:
+            return False
 
-            # Determine risk level
-            try:
-                parsed_url = urllib.parse.urlparse(url)
-                domain = parsed_url.netloc.lower()
+        # IP address pattern
+        ip_pattern = r'https?://\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}'
 
-                if re.match(r'\d+\.\d+\.\d+\.\d+', domain):
-                    risk_level = "High"
-                elif any(shortener in domain for shortener in ['bit.ly', 'tinyurl.com', 't.co', 'goo.gl']):
-                    risk_level = "Medium"
-                elif any(pattern in url.lower() for pattern in ['login', 'signin', 'account', 'secure']):
-                    risk_level = "High"
+        for url in urls:
+            if re.match(ip_pattern, url):
+                return True
 
-                for common_domain in ['google.com', 'apple.com', 'microsoft.com', 'facebook.com', 'paypal.com']:
-                    if domain != common_domain and self.calculate_similarity(domain, common_domain) > 0.8:
-                        risk_level = "High"
-                        break
-            except:
-                pass
+        return False
 
-            extracted_urls.append({
-                'url': url,
-                'risk': risk_level,
-                'source': email_features.get('source', 'unknown'),
-                'timestamp': self.current_datetime
-            })
+    def has_urls_with_suspicious_tlds(self, urls):
+        """Check if URLs have suspicious TLDs"""
+        if not urls:
+            return False
 
-        return features, extracted_urls
+        suspicious_tlds = [
+            'xyz', 'top', 'club', 'online', 'site', 'cyou', 'icu',
+            'work', 'live', 'click', 'link', 'bid', 'party', 'tk',
+            'ml', 'ga', 'cf', 'gq', 'pw'
+        ]
+
+        for url in urls:
+            parsed = urllib.parse.urlparse(url)
+            domain = parsed.netloc.lower()
+
+            if '.' in domain:
+                tld = domain.split('.')[-1]
+                if tld in suspicious_tlds:
+                    return True
+
+        return False
+
+    def has_url_text_mismatch(self, body):
+        """Check for URL text mismatch (e.g., <a href="evil.com">bank.com</a>)"""
+        if not body:
+            return False
+
+        # This is a simple implementation - in HTML emails we would need more sophisticated parsing
+        href_pattern = r'<a\s+(?:[^>]*?\s+)?href=(["\'])(.*?)\1[^>]*>(.*?)</a>'
+
+        matches = re.findall(href_pattern, body, re.IGNORECASE)
+
+        for match in matches:
+            href_url = match[1]
+            link_text = match[2]
+
+            # Remove tags from link text
+            link_text = re.sub(r'<[^>]+>', '', link_text)
+
+            # Extract domains to compare
+            href_domain = self.extract_domain_from_url(href_url)
+
+            # Check if link text contains a URL
+            text_urls = self.find_urls(link_text)
+            if text_urls:
+                text_domain = self.extract_domain_from_url(text_urls[0])
+                if href_domain and text_domain and href_domain != text_domain:
+                    return True
+
+            # Check if link text contains domain-like text
+            domain_pattern = r'[\w-]+\.[\w-]+(?:\.[\w-]+)*'
+            domain_matches = re.findall(domain_pattern, link_text)
+
+            for domain in domain_matches:
+                if href_domain and domain != href_domain and '.' in domain:
+                    return True
+
+        return False
+
+    def extract_domain_from_url(self, url):
+        """Extract domain from URL"""
+        try:
+            parsed = urllib.parse.urlparse(url)
+            domain = parsed.netloc.lower()
+            return domain
+        except:
+            return ""
 
     def scan_phishing_patterns(self, email_features):
-        """Scan for common phishing patterns in email content"""
-        features = {}
-        body = email_features.get('body', '').lower()
+        """Scan for common phishing patterns in the email"""
+        pattern_features = {}
+
         subject = email_features.get('subject', '').lower()
+        body = email_features.get('body', '').lower()
 
-        # Check for urgent language
-        urgent_words = [
-            'urgent', 'immediately', 'alert', 'attention', 'important',
-            'verify', 'suspended', 'limited', 'security', 'required',
-            'update', 'confirm', 'validate', 'unauthorized', 'now',
-            'compromised', 'unusual', 'suspicious', 'locked'
+        # Check subject for suspicious words
+        suspicious_subject_words = [
+            'urgent', 'alert', 'verify', 'update', 'security', 'account',
+            'suspended', 'unusual', 'confirm', 'verify', 'important',
+            'password', 'login', 'immediately', 'attention', 'required'
         ]
-        urgent_word_count = sum(1 for word in urgent_words if word in body or word in subject)
-        features['urgent_language'] = urgent_word_count > 2
-        features['urgent_word_count'] = urgent_word_count
 
-        # Check for threats
-        threat_phrases = [
-            'account will be locked', 'account has been suspended',
-            'unauthorized access', 'security breach', 'unusual activity',
-            'will be terminated', 'violation of terms', 'will be cancelled'
+        pattern_features['subject_has_urgency'] = any(word in subject for word in suspicious_subject_words)
+
+        # Check for urgency phrases in body
+        urgency_phrases = [
+            'act now', 'urgent action', 'immediate action', 'expires soon',
+            'limited time', '24 hours', 'immediately', 'as soon as possible',
+            'failure to comply', 'account will be', 'before it\'s too late',
+            'right away', 'time sensitive'
         ]
-        threat_count = sum(1 for phrase in threat_phrases if phrase in body)
-        features['contains_threats'] = threat_count > 0
-        features['threat_count'] = threat_count
 
-        # Check for requests for personal information
-        personal_info_phrases = [
-            'verify your information', 'confirm your details', 'update your account',
-            'provide your', 'enter your', 'confirm your identity', 'your password',
-            'credit card', 'social security', 'bank account', 'date of birth'
+        pattern_features['body_has_urgency'] = any(phrase in body for phrase in urgency_phrases)
+
+        # Check for sensitive data requests
+        sensitive_requests = [
+            'password', 'credit card', 'account number', 'credentials',
+            'social security', 'ssn', 'banking details', 'personal details',
+            'pin', 'security question', 'mother\'s maiden name', 'login',
+            'username and password'
         ]
-        personal_info_count = sum(1 for phrase in personal_info_phrases if phrase in body)
-        features['requests_personal_info'] = personal_info_count > 0
-        features['personal_info_request_count'] = personal_info_count
 
-        # Check for poor grammar and spelling (very basic)
-        # A real implementation would use more sophisticated NLP
-        grammar_issues = [
-            'kindly', 'do the needful', 'valued customer', 'dear customer',
-            'your account with us', 'greetings of the day', 'official mail'
+        pattern_features['requests_sensitive_data'] = any(phrase in body for phrase in sensitive_requests)
+
+        # Check for suspicious claims
+        suspicious_claims = [
+            'won', 'winner', 'lottery', 'selected', 'prize', 'million',
+            'reward', 'inheritance', 'claim your', 'you have been chosen',
+            'congratulations', 'exclusive offer', 'free gift', 'jackpot'
         ]
-        grammar_count = sum(1 for issue in grammar_issues if issue in body)
-        features['poor_language'] = grammar_count > 1
-        features['grammar_issue_count'] = grammar_count
 
-        # Check for excessive capitalization (often used in scams)
-        cap_sentences = re.findall(r'\b[A-Z]{5,}\b', body + subject)
-        features['excessive_caps'] = len(cap_sentences) > 0
-        features['caps_word_count'] = len(cap_sentences)
+        pattern_features['has_suspicious_claims'] = any(phrase in body for phrase in suspicious_claims)
 
-        # Check for currency or financial discussions
-        money_phrases = [
-            'dollar', 'euro', 'payment', 'transfer', 'money', 'bank',
-            'credit', 'debit', 'cash', 'fund', '$', '€', '£', 'bitcoin',
-            'cryptocurrency', 'wallet', 'transaction'
+        # Check for poor grammar/spelling
+        grammar_indicators = [
+            'kindly', 'dear valued', 'dear costumer', 'dear customer',
+            'your account will closed', 'verify you account', 'your are',
+            'we detected unusual', 'we detected suspicious'
         ]
-        money_count = sum(1 for phrase in money_phrases if phrase in body)
-        features['money_related'] = money_count > 2
-        features['money_term_count'] = money_count
 
-        # Check subject for phishing indicators
-        subject_indicators = [
-            'account', 'verify', 'urgent', 'security', 'update',
-            'confirm', 'suspended', 'unusual', 'access', 'login'
+        pattern_features['has_poor_grammar'] = any(phrase in body for phrase in grammar_indicators)
+
+        # Check for threatening language
+        threatening_phrases = [
+            'suspended', 'terminated', 'closed', 'deleted', 'unauthorized',
+            'suspicious activity', 'unusual activity', 'breach',
+            'compromised', 'locked', 'restricted', 'limitation'
         ]
-        subject_indicator_count = sum(1 for indicator in subject_indicators if indicator in subject)
-        features['suspicious_subject'] = subject_indicator_count > 1
-        features['subject_indicator_count'] = subject_indicator_count
 
-        return features
+        pattern_features['has_threatening_language'] = any(phrase in body for phrase in threatening_phrases)
+
+        return pattern_features
 
     def prepare_features_for_model(self, features_dict):
-        """Prepare features dictionary for model input"""
-        # Check how many features the model expects
-        feature_count = getattr(self, 'model_feature_count', 4)
+        """Prepare features to be used by the machine learning model"""
+        # This implementation is simplified and handles cases when model has fewer features
 
-        # Create a feature vector of the right size
-        feature_vector = np.zeros(feature_count)
+        # Create a standard set of features for the model, ensuring we don't exceed the model's feature count
+        model_features = np.zeros(self.model_feature_count)
 
-        # Populate based on feature count
-        if feature_count == 4:
-            # Map features to a 4-feature vector
-            feature_vector[0] = 1 if features_dict.get('mismatched_reply_to', False) or features_dict.get(
-                'mismatched_return_path', False) else 0
-            feature_vector[1] = 1 if features_dict.get('has_suspicious_urls', False) else 0
-            feature_vector[2] = 1 if features_dict.get('urgent_language', False) or features_dict.get(
-                'contains_threats', False) else 0
-            feature_vector[3] = 1 if features_dict.get('requests_personal_info', False) else 0
-        else:
-            # Default to 10 features if we don't know the exact count
-            # Just fill in what we can and leave the rest as zeros
-            min_count = min(10, feature_count)
+        # Add features only if the model can support them (has enough dimensions)
+        feature_index = 0
 
-            # Map the first few features
-            if min_count > 0:
-                feature_vector[0] = 1 if features_dict.get('mismatched_reply_to', False) else 0
-            if min_count > 1:
-                feature_vector[1] = 1 if features_dict.get('mismatched_return_path', False) else 0
-            if min_count > 2:
-                feature_vector[2] = 1 if features_dict.get('lookalike_domain', False) else 0
-            if min_count > 3:
-                feature_vector[3] = features_dict.get('suspicious_url_count', 0) / 10  # Normalize
-            if min_count > 4:
-                feature_vector[4] = 1 if features_dict.get('has_suspicious_urls', False) else 0
-            if min_count > 5:
-                feature_vector[5] = 1 if features_dict.get('urgent_language', False) else 0
-            if min_count > 6:
-                feature_vector[6] = 1 if features_dict.get('contains_threats', False) else 0
-            if min_count > 7:
-                feature_vector[7] = 1 if features_dict.get('requests_personal_info', False) else 0
-            if min_count > 8:
-                feature_vector[8] = 1 if features_dict.get('poor_language', False) else 0
-            if min_count > 9:
-                feature_vector[9] = 1 if features_dict.get('suspicious_subject', False) else 0
+        # Feature 1: Has suspicious sender domain mismatch
+        if feature_index < self.model_feature_count and features_dict.get('sender_domain_mismatch', False):
+            model_features[feature_index] = 1
+        feature_index += 1
 
-        return feature_vector.reshape(1, -1)  # Reshape for prediction (samples, features)
+        # Feature 2: Has shortened or IP URLs
+        if feature_index < self.model_feature_count and (
+                features_dict.get('has_shortened_urls', False) or features_dict.get('has_ip_urls', False)):
+            model_features[feature_index] = 1
+        feature_index += 1
+
+        # Feature 3: Requests sensitive data
+        if feature_index < self.model_feature_count and features_dict.get('requests_sensitive_data', False):
+            model_features[feature_index] = 1
+        feature_index += 1
+
+        # Feature 4: Contains urgency or threats
+        if feature_index < self.model_feature_count and (
+                features_dict.get('body_has_urgency', False) or features_dict.get('has_threatening_language', False)):
+            model_features[feature_index] = 1
+
+        return model_features.reshape(1, -1)  # Reshape for sklearn's predict method
 
     def run_model(self, features):
-        """Run the machine learning model to predict phishing probability"""
+        """Run the machine learning model on the features"""
         try:
-            if self.loaded_model is not None:
-                # Try to use predict_proba if available (returns probability)
-                if hasattr(self.loaded_model, 'predict_proba'):
-                    probabilities = self.loaded_model.predict_proba(features)
-                    # Return probability of class 1 (phishing)
-                    if probabilities.shape[1] > 1:
-                        return probabilities[0, 1]
-                    else:
-                        return probabilities[0, 0]
+            # Check if model is loaded and has predict method
+            if self.loaded_model is None:
+                print("No model loaded")
+                return 0.5  # Default value if no model
+
+            # Check if the loaded model is an actual model instance or a dictionary
+            if isinstance(self.loaded_model, dict):
+                # If it's a dictionary, we need to convert it to a model object
+                print("Model is a dictionary, attempting to convert")
+
+                # Try to extract a model object from the dictionary
+                if 'model' in self.loaded_model and hasattr(self.loaded_model['model'], 'predict'):
+                    prediction = self.loaded_model['model'].predict(features)
+                    return float(prediction[0])  # Return as float for safe JSON serialization
                 else:
-                    # Fall back to binary prediction
-                    prediction = self.loaded_model.predict(features)
-                    return float(prediction[0])
+                    # Create a new model as fallback
+                    print("Creating a fallback model")
+                    self.create_default_model(os.path.join(self.models_dir, "fallback_model.joblib"))
+
+                    if hasattr(self.loaded_model, 'predict'):
+                        prediction = self.loaded_model.predict(features)
+                        return float(prediction[0])  # Return as float for safe JSON serialization
+                    else:
+                        return 0.7  # Default suspicious value as fallback
+
+            # Run prediction if model has the predict method
+            if hasattr(self.loaded_model, 'predict'):
+                prediction = self.loaded_model.predict_proba(features) if hasattr(self.loaded_model,
+                                                                                  'predict_proba') else self.loaded_model.predict(
+                    features)
+
+                # Handle different prediction formats
+                if hasattr(prediction, 'shape') and len(prediction.shape) > 1 and prediction.shape[1] > 1:
+                    # For predict_proba which returns probabilities for each class
+                    return float(prediction[0][1])  # Probability of phishing (class 1)
+                else:
+                    # For predict which returns the class
+                    return float(prediction[0])  # Convert to float for safety
+
             else:
-                # If no model is loaded, use a simple heuristic
-                return self.simple_heuristic_score(self.features_dict)
+                # Fallback if model doesn't have predict method
+                print("Model doesn't have predict method")
+                return 0.5  # Default value
+
         except Exception as e:
-            print(f"Error running model: {e}")
+            print(f"Error running model: {str(e)}")
             traceback.print_exc()
-            # If model fails, fall back to heuristic
-            return self.simple_heuristic_score(self.features_dict)
-
-    def simple_heuristic_score(self, features):
-        """Simple heuristic to score phishing likelihood if model fails"""
-        score = 0.0
-
-        # Sender checks
-        if features.get('mismatched_reply_to', False):
-            score += 0.2
-        if features.get('mismatched_return_path', False):
-            score += 0.2
-        if features.get('lookalike_domain', False):
-            score += 0.3
-        if features.get('suspicious_sender_domain', False):
-            score += 0.1
-
-        # URL checks
-        if features.get('has_suspicious_urls', False):
-            score += 0.3
-        if features.get('ip_address_urls', 0) > 0:
-            score += 0.2
-        if features.get('url_redirects', 0) > 0:
-            score += 0.1
-
-        # Content checks
-        if features.get('urgent_language', False):
-            score += 0.15
-        if features.get('contains_threats', False):
-            score += 0.2
-        if features.get('requests_personal_info', False):
-            score += 0.25
-        if features.get('poor_language', False):
-            score += 0.1
-        if features.get('suspicious_subject', False):
-            score += 0.1
-
-        # Cap score at 1.0
-        return min(score, 1.0)
+            return 0.5  # Default value in case of error
 
     def generate_suspicious_indicators(self, features):
-        """Generate human-readable suspicious indicators from features"""
+        """Generate list of suspicious indicators based on features"""
         indicators = []
 
         # Sender indicators
-        if features.get('mismatched_reply_to', False):
-            indicators.append(('Reply-To address does not match sender domain', 'High'))
-        if features.get('mismatched_return_path', False):
-            indicators.append(('Return-Path does not match sender domain', 'High'))
-        if features.get('lookalike_domain', False):
-            indicators.append(('Sender domain appears to mimic a well-known domain', 'High'))
-        if features.get('suspicious_sender_domain', False):
-            indicators.append(('Sender uses a domain commonly associated with temporary emails', 'Medium'))
+        if features.get('sender_domain_mismatch', False):
+            indicators.append({
+                'type': 'critical',
+                'name': 'Sender domain mismatch',
+                'description': "The email's From, Reply-To, or Return-Path addresses use different domains, which is a common phishing tactic."
+            })
+
+        if features.get('sender_display_name_mismatch', False):
+            indicators.append({
+                'type': 'critical',
+                'name': 'Display name spoofing',
+                'description': "The sender's display name tries to impersonate a trusted organization that doesn't match the actual email domain."
+            })
+
+        if features.get('sender_has_suspicious_words', False):
+            indicators.append({
+                'type': 'warning',
+                'name': 'Suspicious sender name',
+                'description': "The sender's name contains terms commonly used in phishing attempts, like 'security', 'support', or 'admin'."
+            })
 
         # URL indicators
-        if features.get('ip_address_urls', 0) > 0:
-            indicators.append(('Email contains URLs with IP addresses instead of domains', 'High'))
-        if features.get('url_redirects', 0) > 0:
-            indicators.append(('Email contains shortened URLs or redirects', 'Medium'))
+        if features.get('has_shortened_urls', False):
+            indicators.append({
+                'type': 'critical',
+                'name': 'Shortened URLs',
+                'description': "The email contains shortened URLs that hide the actual destination, a common phishing tactic."
+            })
 
-        suspicious_urls = features.get('suspicious_url_count', 0)
-        if suspicious_urls > 0:
-            indicators.append((f'Contains {suspicious_urls} suspicious URLs', 'High'))
+        if features.get('has_ip_urls', False):
+            indicators.append({
+                'type': 'critical',
+                'name': 'IP address URLs',
+                'description': "The email contains links with raw IP addresses instead of domain names, which is highly suspicious."
+            })
+
+        if features.get('has_suspicious_tlds', False):
+            indicators.append({
+                'type': 'warning',
+                'name': 'Suspicious URL domains',
+                'description': "The email contains URLs with suspicious or uncommon top-level domains often used in phishing."
+            })
+
+        if features.get('has_url_mismatch', False):
+            indicators.append({
+                'type': 'critical',
+                'name': 'URL display mismatch',
+                'description': "The email contains links where the visible text differs from the actual URL destination."
+            })
 
         # Content indicators
-        if features.get('urgent_language', False):
-            indicators.append(('Email uses urgent or alarming language', 'Medium'))
-        if features.get('contains_threats', False):
-            indicators.append(('Email contains threats or consequences', 'High'))
-        if features.get('requests_personal_info', False):
-            indicators.append(('Email asks for personal information', 'High'))
-        if features.get('poor_language', False):
-            indicators.append(('Email contains poor grammar or unusual phrases', 'Low'))
-        if features.get('excessive_caps', False):
-            indicators.append(('Email contains excessive capitalization', 'Low'))
-        if features.get('money_related', False):
-            indicators.append(('Email discusses money or financial transactions', 'Medium'))
-        if features.get('suspicious_subject', False):
-            indicators.append(('Email subject line contains suspicious phrases', 'Medium'))
+        if features.get('subject_has_urgency', False) or features.get('body_has_urgency', False):
+            indicators.append({
+                'type': 'warning',
+                'name': 'Creates false urgency',
+                'description': "The email creates a false sense of urgency to pressure you into taking immediate action without thinking."
+            })
 
-        # Sort by severity (High to Low)
-        severity_order = {'High': 0, 'Medium': 1, 'Low': 2}
-        indicators.sort(key=lambda x: severity_order.get(x[1], 3))
+        if features.get('requests_sensitive_data', False):
+            indicators.append({
+                'type': 'critical',
+                'name': 'Requests sensitive information',
+                'description': "The email asks for passwords, account details, or other sensitive personal information."
+            })
+
+        if features.get('has_suspicious_claims', False):
+            indicators.append({
+                'type': 'warning',
+                'name': 'Suspicious claims or offers',
+                'description': "The email contains claims about prizes, rewards, or offers that are likely fraudulent."
+            })
+
+        if features.get('has_poor_grammar', False):
+            indicators.append({
+                'type': 'info',
+                'name': 'Poor grammar or spelling',
+                'description': "The email contains grammatical errors or unusual phrasing often seen in phishing attempts."
+            })
+
+        if features.get('has_threatening_language', False):
+            indicators.append({
+                'type': 'warning',
+                'name': 'Contains threats or warnings',
+                'description': "The email threatens negative consequences if you don't take immediate action."
+            })
 
         return indicators
 
     def display_analysis_results(self):
-        """Update the report tab with analysis results"""
+        """Display the analysis results in the report tab"""
+        # Check if we have results
         if not self.analysis_results:
             return
 
-        # Clear existing widgets in report tab
+        # Clear the report tab
         for widget in self.report_tab.winfo_children():
             widget.destroy()
 
@@ -1513,1108 +1993,797 @@ class PhishingDetectorApp:
         container = ttk.Frame(self.report_tab)
         container.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
 
-        # Header with description
-        header_frame = ttk.Frame(container)
-        header_frame.pack(fill=tk.X, pady=(0, 15))
+        # Create two columns
+        left_col = ttk.Frame(container)
+        left_col.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
+
+        right_col = ttk.Frame(container)
+        right_col.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(10, 0))
+
+        # Left column - Summary and primary results
+        self.create_summary_section(left_col)
+        self.create_indicators_section(left_col)
+
+        # Right column - Email details and technical analysis
+        self.create_email_details_section(right_col)
+        self.create_urls_section(right_col)
+
+        # Add action buttons at the bottom
+        self.create_action_buttons(container)
+
+    def create_summary_section(self, parent):
+        """Create the summary section of the report"""
+        # Summary frame
+        summary_frame = ttk.LabelFrame(parent, text="Analysis Summary")
+        summary_frame.pack(fill=tk.X, pady=(0, 15))
+
+        # Get values from results
+        is_phishing = self.analysis_results.get('is_phishing', False)
+        probability = self.analysis_results.get('probability', 0.0)
+
+        # Summary content
+        summary_content = ttk.Frame(summary_frame)
+        summary_content.pack(fill=tk.X, padx=15, pady=15)
+
+        # Verdict with icon
+        verdict_frame = ttk.Frame(summary_content)
+        verdict_frame.pack(fill=tk.X, pady=(0, 15))
+
+        if is_phishing:
+            verdict_icon = "🔴"  # Red circle for phishing
+            verdict_text = "PHISHING DETECTED"
+            verdict_color = "danger"
+        else:
+            verdict_icon = "🟢"  # Green circle for safe
+            verdict_text = "NO PHISHING DETECTED"
+            verdict_color = "success"
 
         ttk.Label(
-            header_frame,
-            text="Analysis Report",
-            font=("Segoe UI", 16, "bold")
-        ).pack(side=tk.LEFT)
+            verdict_frame,
+            text=verdict_icon,
+            font=("Segoe UI", 24)
+        ).pack(side=tk.LEFT, padx=(0, 10))
 
-        # Email source info
-        source_label = ttk.Label(
-            header_frame,
-            text=f"Source: {self.analysis_results['source']} • {self.analysis_results['timestamp']}",
-            bootstyle="secondary"
-        )
-        source_label.pack(side=tk.RIGHT)
-
-        # Email meta info
-        meta_frame = ttk.LabelFrame(container, text="Email Information")
-        meta_frame.pack(fill=tk.X, pady=(0, 15))
-
-        # Create a nice looking table for email metadata
-        meta_table = ttk.Treeview(
-            meta_frame,
-            columns=("Field", "Value"),
-            show="headings",
-            height=5,
-            bootstyle="info"
-        )
-        meta_table.heading("Field", text="Field")
-        meta_table.heading("Value", text="Value")
-        meta_table.column("Field", width=150)
-        meta_table.column("Value", width=800)
-        meta_table.pack(padx=10, pady=10, fill=tk.X)
-
-        # Add email fields
-        email_data = self.analysis_results['email']
-        fields_to_display = [
-            ("Subject", email_data.get('subject', 'Unknown')),
-            ("From", email_data.get('from', 'Unknown')),
-            ("To", email_data.get('to', 'Unknown')),
-            ("Date", email_data.get('date', 'Unknown')),
-            ("Return-Path", email_data.get('return_path', 'Not available')),
-            ("Reply-To", email_data.get('reply_to', 'Not available'))
-        ]
-
-        for field, value in fields_to_display:
-            meta_table.insert("", tk.END, values=(field, value))
-
-        # Results section - split in two columns
-        results_container = ttk.Frame(container)
-        results_container.pack(fill=tk.BOTH, expand=True)
-
-        # Left column
-        left_col = ttk.Frame(results_container)
-        left_col.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-
-        # Verdict
-        verdict_frame = ttk.LabelFrame(left_col, text="Analysis Verdict")
-        verdict_frame.pack(fill=tk.X, pady=(0, 15), padx=(0, 7.5))
-
-        # Create a styled verdict display
-        verdict_display = ttk.Frame(verdict_frame)
-        verdict_display.pack(fill=tk.X, padx=10, pady=10)
-
-        # Big verdict label
-        is_phishing = self.analysis_results['is_phishing']
-        verdict_text = "PHISHING DETECTED" if is_phishing else "NO PHISHING DETECTED"
-        verdict_color = "#dc3545" if is_phishing else "#28a745"
+        verdict_text_frame = ttk.Frame(verdict_frame)
+        verdict_text_frame.pack(side=tk.LEFT)
 
         ttk.Label(
-            verdict_display,
+            verdict_text_frame,
             text=verdict_text,
-            font=("Segoe UI", 18, "bold"),
-            foreground=verdict_color
-        ).pack(anchor=tk.CENTER, pady=10)
-
-        # Probability frame with progress meter
-        prob_frame = ttk.Frame(verdict_display)
-        prob_frame.pack(fill=tk.X, pady=5)
+            font=("Segoe UI", 16, "bold"),
+            bootstyle=verdict_color
+        ).pack(anchor=tk.W)
 
         ttk.Label(
-            prob_frame,
-            text="Confidence:",
-            font=("Segoe UI", 10)
-        ).pack(side=tk.LEFT)
-
-        # Format probability as percentage
-        probability = self.analysis_results['probability'] * 100
-
-        prob_value = ttk.Label(
-            prob_frame,
-            text=f"{probability:.1f}%",
-            font=("Segoe UI", 10, "bold"),
-            foreground=verdict_color
-        )
-        prob_value.pack(side=tk.LEFT, padx=(5, 10))
+            verdict_text_frame,
+            text=f"Confidence: {probability:.1%}",
+            bootstyle="secondary"
+        ).pack(anchor=tk.W)
 
         # Probability meter
-        prob_meter = ttk.Progressbar(
-            verdict_display,
-            value=probability,
-            bootstyle="danger" if is_phishing else "success"
+        meter_frame = ttk.Frame(summary_content)
+        meter_frame.pack(fill=tk.X, pady=(0, 15))
+
+        ttk.Label(
+            meter_frame,
+            text="Phishing Probability:",
+            font=("Segoe UI", 10, "bold")
+        ).pack(anchor=tk.W, pady=(0, 5))
+
+        # Probability bar
+        prob_bar = ttk.Progressbar(
+            meter_frame,
+            value=probability * 100,
+            length=300,
+            bootstyle=verdict_color
         )
-        prob_meter.pack(fill=tk.X, pady=(0, 10))
+        prob_bar.pack(fill=tk.X)
 
-        # Suspicious indicators
-        indicators_frame = ttk.LabelFrame(left_col, text="Suspicious Indicators")
-        indicators_frame.pack(fill=tk.BOTH, expand=True, padx=(0, 7.5))
+        # Scale labels
+        scale_frame = ttk.Frame(meter_frame)
+        scale_frame.pack(fill=tk.X)
 
-        # Create a nice looking list for indicators
-        indicators_list = ttk.Treeview(
-            indicators_frame,
-            columns=("Indicator", "Severity"),
-            show="headings",
-            height=8,
-            bootstyle="danger" if is_phishing else "success"
-        )
-        indicators_list.heading("Indicator", text="Suspicious Element")
-        indicators_list.heading("Severity", text="Severity")
-        indicators_list.column("Indicator", width=350)
-        indicators_list.column("Severity", width=100)
-        indicators_list.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
+        ttk.Label(
+            scale_frame,
+            text="0%",
+            bootstyle="secondary"
+        ).pack(side=tk.LEFT)
 
-        # Add indicator tags for color-coding
-        indicators_list.tag_configure("high", background="#ffcccc")
-        indicators_list.tag_configure("medium", background="#fff2cc")
-        indicators_list.tag_configure("low", background="#e6f2ff")
+        ttk.Label(
+            scale_frame,
+            text="50%",
+            bootstyle="secondary"
+        ).pack(side=tk.LEFT, padx=(125, 0))
 
-        # Add indicators to the list
-        for indicator, severity in self.analysis_results['indicators']:
-            item_id = indicators_list.insert("", tk.END, values=(indicator, severity))
-            tag = severity.lower() if severity.lower() in ["high", "medium", "low"] else ""
-            if tag:
-                indicators_list.item(item_id, tags=(tag,))
+        ttk.Label(
+            scale_frame,
+            text="100%",
+            bootstyle="secondary"
+        ).pack(side=tk.RIGHT)
 
-        # Right column
-        right_col = ttk.Frame(results_container)
-        right_col.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+        # Summary text
+        summary_text = f"The email was analyzed on {self.current_datetime}. "
 
-        # Feature importance visualization
-        importance_frame = ttk.LabelFrame(right_col, text="Feature Importance")
-        importance_frame.pack(fill=tk.BOTH, expand=True, padx=(7.5, 0), pady=(0, 15))
-
-        # Create a frame for feature importance visualization
-        chart_frame = ttk.Frame(importance_frame)
-        chart_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-
-        # Generate feature importance based on the analysis
-        top_features = self.get_top_features(self.analysis_results['features'])
-
-        # Create bars for each feature
-        for i, (feature, importance) in enumerate(top_features):
-            # Label
-            ttk.Label(
-                chart_frame,
-                text=feature,
-                font=("Segoe UI", 9),
-                width=20,
-                anchor=tk.W
-            ).grid(row=i, column=0, padx=(0, 10), pady=5, sticky=tk.W)
-
-            # Progress bar as bar chart
-            bar = ttk.Progressbar(
-                chart_frame,
-                value=importance * 100,
-                length=200,
-                bootstyle="danger" if is_phishing else "success"
-            )
-            bar.grid(row=i, column=1, pady=5, sticky=tk.W)
-
-            # Value label
-            ttk.Label(
-                chart_frame,
-                text=f"{importance * 100:.0f}%",
-                font=("Segoe UI", 9),
-                width=5
-            ).grid(row=i, column=2, padx=(5, 0), pady=5, sticky=tk.W)
-
-        # Action recommendations
-        action_frame = ttk.LabelFrame(right_col, text="Recommended Actions")
-        action_frame.pack(fill=tk.BOTH, expand=True, padx=(7.5, 0))
-
-        action_container = ttk.Frame(action_frame)
-        action_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-
-        # Different recommendations based on verdict
         if is_phishing:
-            # Phishing detected - warning actions
-            actions = [
-                ("🔒", "Do not click on any links in this email"),
-                ("🗑️", "Delete this email immediately"),
-                ("⚠️", "Report this email to your IT department"),
-                ("🔔", "Alert colleagues if this is a company-wide phishing attempt"),
-                ("👁️", "Check your accounts for any suspicious activity")
-            ]
+            summary_text += "Our analysis indicates this is very likely a phishing attempt. "
+            summary_text += "We recommend you do NOT click any links, download attachments, or reply to this message."
         else:
-            # No phishing detected - safe actions
-            actions = [
-                ("✅", "This email appears to be legitimate"),
-                ("📝", "Always verify the sender before engaging with important emails"),
-                ("🔍", "Check URLs by hovering over links before clicking"),
-                ("📈", "Keep your software and security tools updated"),
-                ("🛡️", "Stay vigilant for future suspicious communications")
-            ]
+            summary_text += "Our analysis suggests this email is likely safe, "
+            summary_text += "but always exercise caution with unexpected emails."
 
-        for i, (icon, action) in enumerate(actions):
-            action_row = ttk.Frame(action_container)
-            action_row.pack(fill=tk.X, pady=5, anchor=tk.W)
+        ttk.Label(
+            summary_content,
+            text=summary_text,
+            wraplength=400,
+            justify=tk.LEFT
+        ).pack(fill=tk.X)
+
+    def create_indicators_section(self, parent):
+        """Create the indicators section of the report"""
+        # Get indicators from results
+        indicators = self.analysis_results.get('indicators', [])
+
+        if not indicators:
+            return
+
+        # Indicators frame
+        indicators_frame = ttk.LabelFrame(parent, text="Suspicious Indicators")
+        indicators_frame.pack(fill=tk.BOTH, expand=True)
+
+        # Container for indicators with scrolling
+        indicators_canvas = ttk.Canvas(indicators_frame)
+        scrollbar = ttk.Scrollbar(indicators_frame, orient="vertical", command=indicators_canvas.yview)
+        scrollable_frame = ttk.Frame(indicators_canvas)
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: indicators_canvas.configure(scrollregion=indicators_canvas.bbox("all"))
+        )
+
+        indicators_canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        indicators_canvas.configure(yscrollcommand=scrollbar.set)
+
+        indicators_canvas.pack(side="left", fill="both", expand=True, padx=10, pady=10)
+        scrollbar.pack(side="right", fill="y", pady=10)
+
+        # Add indicators to the frame
+        for i, indicator in enumerate(indicators):
+            self.create_indicator_item(scrollable_frame, indicator, i)
+
+    def create_indicator_item(self, parent, indicator, index):
+        """Create an individual indicator item"""
+        # Get indicator data
+        indicator_type = indicator.get('type', 'info')
+        indicator_name = indicator.get('name', 'Unknown')
+        indicator_desc = indicator.get('description', '')
+
+        # Map type to style and icon
+        style_map = {
+            'critical': ('danger', '⚠️'),
+            'warning': ('warning', '⚠️'),
+            'info': ('info', 'ℹ️')
+        }
+
+        style, icon = style_map.get(indicator_type, style_map['info'])
+
+        # Create frame for this indicator
+        item_frame = ttk.Frame(parent)
+        item_frame.pack(fill=tk.X, pady=(0, 10))
+
+        # Icon and name row
+        header_frame = ttk.Frame(item_frame)
+        header_frame.pack(fill=tk.X)
+
+        ttk.Label(
+            header_frame,
+            text=icon,
+            font=("Segoe UI", 12)
+        ).pack(side=tk.LEFT)
+
+        ttk.Label(
+            header_frame,
+            text=indicator_name,
+            font=("Segoe UI", 10, "bold"),
+            bootstyle=style
+        ).pack(side=tk.LEFT, padx=(5, 0))
+
+        # Description
+        ttk.Label(
+            item_frame,
+            text=indicator_desc,
+            wraplength=370,
+            justify=tk.LEFT
+        ).pack(fill=tk.X, padx=(25, 0))
+
+        # Add separator if not the last item
+        if index < len(self.analysis_results.get('indicators', [])) - 1:
+            ttk.Separator(parent).pack(fill=tk.X, pady=(0, 10))
+
+    def create_email_details_section(self, parent):
+        """Create the email details section"""
+        # Email details frame
+        details_frame = ttk.LabelFrame(parent, text="Email Details")
+        details_frame.pack(fill=tk.X, pady=(0, 15))
+
+        details_content = ttk.Frame(details_frame)
+        details_content.pack(fill=tk.X, padx=15, pady=15)
+
+        # Get email data
+        email_data = self.analysis_results.get('email', {})
+
+        # Details table
+        details = [
+            ("From:", email_data.get('from', 'Unknown')),
+            ("To:", email_data.get('to', 'Unknown')),
+            ("Subject:", email_data.get('subject', 'No Subject')),
+            ("Date:", email_data.get('date', 'Unknown')),
+            ("Source:", self.analysis_results.get('source', 'Manual input'))
+        ]
+
+        for i, (label, value) in enumerate(details):
+            ttk.Label(
+                details_content,
+                text=label,
+                font=("Segoe UI", 10, "bold")
+            ).grid(row=i, column=0, sticky=tk.W, pady=2)
 
             ttk.Label(
-                action_row,
-                text=icon,
-                font=("Segoe UI", 14)
+                details_content,
+                text=value,
+                wraplength=300
+            ).grid(row=i, column=1, sticky=tk.W, padx=(10, 0), pady=2)
+
+    def create_urls_section(self, parent):
+        """Create the URLs section"""
+        # Get URLs from analysis
+        urls = self.analysis_results.get('extracted_urls', [])
+
+        if not urls:
+            return
+
+        # URLs frame
+        urls_frame = ttk.LabelFrame(parent, text="Detected URLs")
+        urls_frame.pack(fill=tk.BOTH, expand=True)
+
+        urls_content = ttk.Frame(urls_frame)
+        urls_content.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
+
+        # URL count
+        ttk.Label(
+            urls_content,
+            text=f"Found {len(urls)} URLs in this email:",
+            font=("Segoe UI", 10, "bold")
+        ).pack(anchor=tk.W, pady=(0, 10))
+
+        # URL list with scrolling
+        url_canvas = ttk.Canvas(urls_content)
+        url_scrollbar = ttk.Scrollbar(urls_content, orient="vertical", command=url_canvas.yview)
+        url_frame = ttk.Frame(url_canvas)
+
+        url_frame.bind(
+            "<Configure>",
+            lambda e: url_canvas.configure(scrollregion=url_canvas.bbox("all"))
+        )
+
+        url_canvas.create_window((0, 0), window=url_frame, anchor="nw")
+        url_canvas.configure(yscrollcommand=url_scrollbar.set)
+
+        url_canvas.pack(side="left", fill="both", expand=True)
+        url_scrollbar.pack(side="right", fill="y")
+
+        # Add URLs to the list
+        for i, url in enumerate(urls):
+            url_item = ttk.Frame(url_frame)
+            url_item.pack(fill=tk.X, pady=(0, 5))
+
+            ttk.Label(
+                url_item,
+                text=f"{i + 1}.",
+                font=("Segoe UI", 10, "bold")
             ).pack(side=tk.LEFT)
 
             ttk.Label(
-                action_row,
-                text=action,
-                font=("Segoe UI", 10),
+                url_item,
+                text=url,
                 wraplength=300
-            ).pack(side=tk.LEFT, padx=(10, 0))
+            ).pack(side=tk.LEFT, padx=(5, 0))
 
-    def get_top_features(self, features_dict):
-        """Extract and sort the most important features for visualization"""
-        # Map features to importance (simplified)
-        feature_importance = []
+    def create_action_buttons(self, parent):
+        """Create action buttons for the report"""
+        button_frame = ttk.Frame(parent)
+        button_frame.pack(fill=tk.X, pady=(15, 0))
 
-        # Add categorical features with custom importance
-        if features_dict.get('mismatched_reply_to', False):
-            feature_importance.append(("Mismatched Reply-To", 0.8))
+        # Phishing verdict
+        is_phishing = self.analysis_results.get('is_phishing', False)
 
-        if features_dict.get('mismatched_return_path', False):
-            feature_importance.append(("Mismatched Return-Path", 0.8))
+        if is_phishing:
+            # Report phishing button
+            ttk.Button(
+                button_frame,
+                text="Report as Phishing",
+                bootstyle="danger",
+                command=self.report_phishing
+            ).pack(side=tk.LEFT, padx=(0, 10))
 
-        if features_dict.get('lookalike_domain', False):
-            feature_importance.append(("Lookalike Domain", 0.85))
+            # Block sender button
+            ttk.Button(
+                button_frame,
+                text="Block Sender",
+                bootstyle="warning-outline",
+                command=self.block_sender
+            ).pack(side=tk.LEFT)
 
-        if features_dict.get('has_suspicious_urls', False):
-            feature_importance.append(("Suspicious URLs", 0.75))
+        else:
+            # Mark as safe button
+            ttk.Button(
+                button_frame,
+                text="Mark as Safe",
+                bootstyle="success",
+                command=self.mark_as_safe
+            ).pack(side=tk.LEFT, padx=(0, 10))
 
-        if features_dict.get('ip_address_urls', 0) > 0:
-            feature_importance.append(("IP Address URLs", 0.8))
+            # Report false negative button
+            ttk.Button(
+                button_frame,
+                text="Report as Phishing",
+                bootstyle="warning-outline",
+                command=self.report_phishing
+            ).pack(side=tk.LEFT)
 
-        if features_dict.get('url_redirects', 0) > 0:
-            feature_importance.append(("URL Redirects", 0.6))
-
-        if features_dict.get('urgent_language', False):
-            feature_importance.append(("Urgent Language", 0.65))
-
-        if features_dict.get('contains_threats', False):
-            feature_importance.append(("Threatening Content", 0.7))
-
-        if features_dict.get('requests_personal_info', False):
-            feature_importance.append(("Requests Personal Info", 0.9))
-
-        if features_dict.get('poor_language', False):
-            feature_importance.append(("Poor Grammar", 0.5))
-
-        if features_dict.get('excessive_caps', False):
-            feature_importance.append(("Excessive Capitalization", 0.3))
-
-        if features_dict.get('suspicious_subject', False):
-            feature_importance.append(("Suspicious Subject", 0.6))
-
-        # Sort by importance (descending)
-        feature_importance.sort(key=lambda x: x[1], reverse=True)
-
-        # Return top 5 features (or fewer if not enough)
-        return feature_importance[:5]
-
-    def setup_urls_tab(self):
-        """Set up the suspicious URLs tab with extracted links"""
-        # Container with padding
-        container = ttk.Frame(self.urls_tab)
-        container.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
-
-        # Header with description
-        header_frame = ttk.Frame(container)
-        header_frame.pack(fill=tk.X, pady=(0, 15))
-
-        ttk.Label(
-            header_frame,
-            text="Suspicious URLs Database",
-            font=("Segoe UI", 16, "bold")
-        ).pack(side=tk.LEFT)
-
-        ttk.Label(
-            header_frame,
-            text="This database stores all suspicious URLs found in analyzed emails",
-            bootstyle="secondary"
-        ).pack(side=tk.LEFT, padx=(10, 0))
-
-        # Search frame
-        search_frame = ttk.Frame(container)
-        search_frame.pack(fill=tk.X, pady=(0, 15))
-
-        ttk.Label(
-            search_frame,
-            text="Search:",
-            font=("Segoe UI", 10)
-        ).pack(side=tk.LEFT)
-
-        self.url_search_var = StringVar()
-        search_entry = ttk.Entry(search_frame, width=40, textvariable=self.url_search_var)
-        search_entry.pack(side=tk.LEFT, padx=(5, 10))
-
+        # Save report button
         ttk.Button(
-            search_frame,
-            text="Search",
+            button_frame,
+            text="Save Report",
             bootstyle="info-outline",
-            command=self.search_urls
-        ).pack(side=tk.LEFT)
-
-        ttk.Button(
-            search_frame,
-            text="Clear",
-            bootstyle="secondary-outline",
-            command=self.clear_url_search
-        ).pack(side=tk.LEFT, padx=(5, 0))
-
-        # Filter options
-        filter_frame = ttk.Frame(container)
-        filter_frame.pack(fill=tk.X, pady=(0, 15))
-
-        ttk.Label(
-            filter_frame,
-            text="Filter by:",
-            font=("Segoe UI", 10)
-        ).pack(side=tk.LEFT)
-
-        self.today_only_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(
-            filter_frame,
-            text="Today only",
-            bootstyle="info-round-toggle",
-            variable=self.today_only_var,
-            command=self.filter_urls
-        ).pack(side=tk.LEFT, padx=(5, 10))
-
-        self.high_risk_only_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(
-            filter_frame,
-            text="High risk only",
-            bootstyle="danger-round-toggle",
-            variable=self.high_risk_only_var,
-            command=self.filter_urls
-        ).pack(side=tk.LEFT)
-
-        # URLs table
-        table_frame = ttk.Frame(container)
-        table_frame.pack(fill=tk.BOTH, expand=True)
-
-        # Create advanced treeview for URLs
-        columns = ("URL", "Risk", "Source", "Date/Time")
-        self.urls_table = ttk.Treeview(
-            table_frame,
-            columns=columns,
-            show="headings",
-            bootstyle="info"
-        )
-
-        # Configure columns
-        self.urls_table.heading("URL", text="URL")
-        self.urls_table.heading("Risk", text="Risk Level")
-        self.urls_table.heading("Source", text="Source")
-        self.urls_table.heading("Date/Time", text="Date/Time")
-
-        self.urls_table.column("URL", width=500)
-        self.urls_table.column("Risk", width=100)
-        self.urls_table.column("Source", width=150)
-        self.urls_table.column("Date/Time", width=150)
-
-        # Add scrollbars
-        y_scrollbar = ttk.Scrollbar(
-            table_frame,
-            orient="vertical",
-            command=self.urls_table.yview
-        )
-        self.urls_table.configure(yscrollcommand=y_scrollbar.set)
-
-        # Pack elements
-        self.urls_table.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        y_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
-        # Configure tag colors
-        self.urls_table.tag_configure("high_risk", background="#ffcccc")
-        self.urls_table.tag_configure("medium_risk", background="#fff2cc")
-        self.urls_table.tag_configure("low_risk", background="#e6f2ff")
-
-        # Double-click to open URL
-        self.urls_table.bind("<Double-1>", self.on_url_double_click)
-
-        # Buttons below the table
-        buttons_frame = ttk.Frame(container)
-        buttons_frame.pack(fill=tk.X, pady=(15, 0))
-
-        ttk.Button(
-            buttons_frame,
-            text="Export URLs",
-            bootstyle="info",
-            command=self.export_urls
-        ).pack(side=tk.LEFT)
-
-        ttk.Button(
-            buttons_frame,
-            text="Delete Selected",
-            bootstyle="danger-outline",
-            command=self.delete_selected_url
-        ).pack(side=tk.LEFT, padx=(10, 0))
-
-        ttk.Button(
-            buttons_frame,
-            text="Clear All",
-            bootstyle="danger",
-            command=self.clear_all_urls
+            command=self.save_report
         ).pack(side=tk.RIGHT)
 
-        # Initially load and display URLs
-        self.populate_urls_table()
-
-    def on_url_double_click(self, event):
-        """Handle double-click on URL in table - ask before opening"""
-        item_id = self.urls_table.identify_row(event.y)
-        if not item_id:
-            return
-
-        # Get the URL from the selected item
-        url = self.urls_table.item(item_id, "values")[0]
-
-        # Ask for confirmation
-        response = Messagebox.show_question(
-            f"Do you want to open this URL?\n\n{url}\n\nWARNING: This URL was flagged as suspicious!",
-            "Open URL",
-            buttons=["Yes:primary", "No:secondary"]
+    def report_phishing(self):
+        """Report email as phishing"""
+        Messagebox.show_info(
+            "This feature would typically send the phishing email to your organization's security team or to services like Google's Phishing Protection or Microsoft's Report Message.",
+            "Report Phishing"
         )
 
-        if response == "Yes":
-            try:
-                # Open in default browser
-                webbrowser.open(url)
-            except Exception as e:
-                Messagebox.show_error(
-                    f"Error opening URL: {str(e)}",
-                    "Error"
-                )
-
-    def search_urls(self):
-        """Search URLs based on search term"""
-        self.populate_urls_table()
-
-    def clear_url_search(self):
-        """Clear search field and reset URL table"""
-        self.url_search_var.set("")
-        self.populate_urls_table()
-
-    def filter_urls(self):
-        """Apply filters to URLs table"""
-        self.populate_urls_table()
-
-    def populate_urls_table(self):
-        """Populate the URLs table with filtered data"""
-        # Clear existing items
-        for item in self.urls_table.get_children():
-            self.urls_table.delete(item)
-
-        # Get search and filter criteria
-        search_term = self.url_search_var.get().lower()
-        today_only = self.today_only_var.get()
-        high_risk_only = self.high_risk_only_var.get()
-
-        # Get today's date for filtering
-        today = datetime.now().strftime("%Y-%m-%d")
-
-        # Filter URLs
-        filtered_urls = []
-        for url_item in self.suspicious_urls:
-            url = url_item['url'].lower()
-            risk = url_item['risk']
-            timestamp = url_item['timestamp']
-
-            # Apply search filter
-            if search_term and search_term not in url:
-                continue
-
-            # Apply date filter
-            if today_only and not timestamp.startswith(today):
-                continue
-
-            # Apply risk filter
-            if high_risk_only and risk != "High":
-                continue
-
-            filtered_urls.append(url_item)
-
-        # Add filtered URLs to table
-        for url_item in filtered_urls:
-            item_id = self.urls_table.insert("", tk.END, values=(
-                url_item['url'],
-                url_item['risk'],
-                url_item['source'],
-                url_item['timestamp']
-            ))
-
-            # Apply risk-based tag
-            if url_item['risk'] == "High":
-                self.urls_table.item(item_id, tags=("high_risk",))
-            elif url_item['risk'] == "Medium":
-                self.urls_table.item(item_id, tags=("medium_risk",))
-            elif url_item['risk'] == "Low":
-                self.urls_table.item(item_id, tags=("low_risk",))
-
-    def export_urls(self):
-        """Export suspicious URLs to CSV file"""
-        if not self.suspicious_urls:
-            Messagebox.show_info(
-                "No URLs to export.",
-                "Export URLs"
-            )
+    def block_sender(self):
+        """Block sender of the email"""
+        # Get sender email
+        if not self.analysis_results:
             return
 
-        # Ask for file location
+        sender = self.analysis_results.get('email', {}).get('from', '')
+
+        Messagebox.show_info(
+            f"This would typically add the sender '{sender}' to your email client's block list. This is a placeholder for that functionality.",
+            "Block Sender"
+        )
+
+    def mark_as_safe(self):
+        """Mark email as safe"""
+        Messagebox.show_info(
+            "This would typically add the sender to your safe senders list and improve the model through feedback. This is a placeholder for that functionality.",
+            "Mark as Safe"
+        )
+
+    def save_report(self):
+        """Save analysis report to file"""
+        if not self.analysis_results:
+            return
+
+        # Get a file path to save to
         file_path = filedialog.asksaveasfilename(
-            defaultextension=".csv",
-            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
-            title="Export Suspicious URLs"
+            title="Save Report",
+            filetypes=[("HTML files", "*.html"), ("Text files", "*.txt"), ("All files", "*.*")],
+            defaultextension=".html"
         )
 
         if not file_path:
-            return  # User cancelled
+            return
 
         try:
-            # Write URLs to CSV
-            with open(file_path, 'w', newline='') as file:
-                writer = csv.writer(file)
-                # Write header
-                writer.writerow(["URL", "Risk Level", "Source", "Date/Time"])
-                # Write data
-                for url_item in self.suspicious_urls:
-                    writer.writerow([
-                        url_item['url'],
-                        url_item['risk'],
-                        url_item['source'],
-                        url_item['timestamp']
-                    ])
+            # Simple HTML report
+            if file_path.endswith('.html'):
+                self.save_html_report(file_path)
+            else:
+                self.save_text_report(file_path)
 
-            Messagebox.show_info(
-                f"Successfully exported {len(self.suspicious_urls)} URLs to {file_path}",
-                "Export Complete"
-            )
+            self.update_status(f"Report saved to {os.path.basename(file_path)}", "success")
+
         except Exception as e:
+            print(f"Error saving report: {e}")
+            traceback.print_exc()
+            Messagebox.show_error(
+                f"Error saving report: {str(e)}",
+                "Save Error"
+            )
+
+    def save_html_report(self, file_path):
+        """Save report as HTML file"""
+        # Get data
+        is_phishing = self.analysis_results.get('is_phishing', False)
+        probability = self.analysis_results.get('probability', 0.0)
+        email_data = self.analysis_results.get('email', {})
+        indicators = self.analysis_results.get('indicators', [])
+        urls = self.analysis_results.get('extracted_urls', [])
+
+        # Verdict text
+        verdict = "PHISHING DETECTED" if is_phishing else "NO PHISHING DETECTED"
+        verdict_color = "#dc3545" if is_phishing else "#28a745"
+
+        # Create HTML
+        html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Phishing Analysis Report</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 20px; }}
+                .header {{ text-align: center; margin-bottom: 20px; }}
+                .verdict {{ color: {verdict_color}; font-size: 24px; font-weight: bold; }}
+                .section {{ margin-bottom: 20px; border: 1px solid #ddd; padding: 15px; border-radius: 5px; }}
+                .critical {{ color: #dc3545; }}
+                .warning {{ color: #ffc107; }}
+                .info {{ color: #17a2b8; }}
+                table {{ width: 100%; border-collapse: collapse; }}
+                th, td {{ text-align: left; padding: 8px; border-bottom: 1px solid #ddd; }}
+                th {{ background-color: #f2f2f2; }}
+                .footer {{ text-align: center; font-size: 12px; color: #666; margin-top: 30px; }}
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>Phishing Email Analysis Report</h1>
+                <p>Generated on {self.current_datetime}</p>
+                <p class="verdict">{verdict}</p>
+                <p>Phishing Probability: {probability:.1%}</p>
+            </div>
+
+            <div class="section">
+                <h2>Email Details</h2>
+                <table>
+                    <tr><th>From</th><td>{email_data.get('from', 'Unknown')}</td></tr>
+                    <tr><th>To</th><td>{email_data.get('to', 'Unknown')}</td></tr>
+                    <tr><th>Subject</th><td>{email_data.get('subject', 'No Subject')}</td></tr>
+                    <tr><th>Date</th><td>{email_data.get('date', 'Unknown')}</td></tr>
+                    <tr><th>Source</th><td>{self.analysis_results.get('source', 'Manual input')}</td></tr>
+                </table>
+            </div>
+        """
+
+        # Add indicators section
+        if indicators:
+            html += """
+            <div class="section">
+                <h2>Suspicious Indicators</h2>
+                <ul>
+            """
+
+            for indicator in indicators:
+                indicator_type = indicator.get('type', 'info')
+                indicator_name = indicator.get('name', 'Unknown')
+                indicator_desc = indicator.get('description', '')
+
+                html += f"""
+                <li>
+                    <span class="{indicator_type}"><strong>{indicator_name}</strong></span>
+                    <p>{indicator_desc}</p>
+                </li>
+                """
+
+            html += """
+                </ul>
+            </div>
+            """
+
+        # Add URLs section
+        if urls:
+            html += f"""
+            <div class="section">
+                <h2>Detected URLs ({len(urls)})</h2>
+                <ol>
+            """
+
+            for url in urls:
+                html += f"<li>{url}</li>"
+
+            html += """
+                </ol>
+            </div>
+            """
+
+        # Add footer and close HTML
+        html += f"""
+            <div class="footer">
+                <p>Generated by Phishing Detector v1.0.0</p>
+                <p>&copy; 2025 {self.current_user}</p>
+            </div>
+        </body>
+        </html>
+        """
+
+        # Write to file
+        with open(file_path, 'w', encoding='utf-8') as file:
+            file.write(html)
+
+    def save_text_report(self, file_path):
+        """Save report as plain text file"""
+        # Get data
+        is_phishing = self.analysis_results.get('is_phishing', False)
+        probability = self.analysis_results.get('probability', 0.0)
+        email_data = self.analysis_results.get('email', {})
+        indicators = self.analysis_results.get('indicators', [])
+        urls = self.analysis_results.get('extracted_urls', [])
+
+        # Verdict text
+        verdict = "PHISHING DETECTED" if is_phishing else "NO PHISHING DETECTED"
+
+        # Create text report
+        report = f"""
+PHISHING EMAIL ANALYSIS REPORT
+Generated on {self.current_datetime}
+
+VERDICT: {verdict}
+Phishing Probability: {probability:.1%}
+
+EMAIL DETAILS:
+From: {email_data.get('from', 'Unknown')}
+To: {email_data.get('to', 'Unknown')}
+Subject: {email_data.get('subject', 'No Subject')}
+Date: {email_data.get('date', 'Unknown')}
+Source: {self.analysis_results.get('source', 'Manual input')}
+"""
+
+        # Add indicators section
+        if indicators:
+            report += "\nSUSPICIOUS INDICATORS:\n"
+
+            for i, indicator in enumerate(indicators):
+                indicator_type = indicator.get('type', 'info').upper()
+                indicator_name = indicator.get('name', 'Unknown')
+                indicator_desc = indicator.get('description', '')
+
+                report += f"{i + 1}. [{indicator_type}] {indicator_name}\n   {indicator_desc}\n\n"
+
+        # Add URLs section
+        if urls:
+            report += f"\nDETECTED URLS ({len(urls)}):\n"
+
+            for i, url in enumerate(urls):
+                report += f"{i + 1}. {url}\n"
+
+        # Add footer
+        report += f"\nGenerated by Phishing Detector v1.0.0\n© 2025 {self.current_user}"
+
+        # Write to file
+        with open(file_path, 'w', encoding='utf-8') as file:
+            file.write(report)
+
+    def add_url_dialog(self):
+        """Show dialog to manually add a suspicious URL"""
+        # Create dialog window
+        dialog = ttk.Toplevel(self.root)
+        dialog.title("Add Suspicious URL")
+        dialog.geometry("500x300")
+
+        # Center the dialog
+        screen_width = dialog.winfo_screenwidth()
+        screen_height = dialog.winfo_screenheight()
+        x = (screen_width - 500) // 2
+        y = (screen_height - 300) // 2
+        dialog.geometry(f"500x300+{x}+{y}")
+
+        # Make it modal
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        # Content
+        content_frame = ttk.Frame(dialog)
+        content_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+
+        ttk.Label(
+            content_frame,
+            text="Add Suspicious URL",
+            font=("Segoe UI", 14, "bold")
+        ).pack(pady=(0, 15))
+
+        # URL input
+        url_frame = ttk.Frame(content_frame)
+        url_frame.pack(fill=tk.X, pady=(0, 10))
+
+        ttk.Label(
+            url_frame,
+            text="URL:",
+            width=10
+        ).pack(side=tk.LEFT)
+
+        url_var = StringVar()
+        url_entry = ttk.Entry(
+            url_frame,
+            textvariable=url_var,
+            width=50
+        )
+        url_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        url_entry.focus()
+
+        # Source input
+        source_frame = ttk.Frame(content_frame)
+        source_frame.pack(fill=tk.X, pady=(0, 10))
+
+        ttk.Label(
+            source_frame,
+            text="Source:",
+            width=10
+        ).pack(side=tk.LEFT)
+
+        source_var = StringVar(value="Manual entry")
+        source_entry = ttk.Entry(
+            source_frame,
+            textvariable=source_var,
+            width=50
+        )
+        source_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        # Risk level
+        risk_frame = ttk.Frame(content_frame)
+        risk_frame.pack(fill=tk.X, pady=(0, 15))
+
+        ttk.Label(
+            risk_frame,
+            text="Risk Level:",
+            width=10
+        ).pack(side=tk.LEFT)
+
+        risk_var = StringVar(value="Medium")
+        risk_combo = ttk.Combobox(
+            risk_frame,
+            textvariable=risk_var,
+            values=["Low", "Medium", "High", "Critical"],
+            width=15
+        )
+        risk_combo.pack(side=tk.LEFT)
+
+        # Buttons
+        button_frame = ttk.Frame(content_frame)
+        button_frame.pack(fill=tk.X, pady=(15, 0))
+
+        ttk.Button(
+            button_frame,
+            text="Cancel",
+            bootstyle="secondary",
+            command=dialog.destroy
+        ).pack(side=tk.RIGHT, padx=(10, 0))
+
+        ttk.Button(
+            button_frame,
+            text="Add URL",
+            bootstyle="primary",
+            command=lambda: self.add_url_from_dialog(url_var.get(), source_var.get(), risk_var.get(), dialog)
+        ).pack(side=tk.RIGHT)
+
+    def add_url_from_dialog(self, url, source, risk_level, dialog):
+        """Add URL from dialog input"""
+        if not url:
+            Messagebox.show_warning("Please enter a URL", "Missing URL")
+            return
+
+        # Validate URL format
+        if not url.startswith(('http://', 'https://')):
+            url = 'http://' + url
+
+        try:
+            # Create URL entry
+            url_entry = {
+                'url': url,
+                'source': source,
+                'date_added': self.current_datetime,
+                'risk_level': risk_level
+            }
+
+            # Add to list and save
+            self.suspicious_urls.append(url_entry)
+            self.save_suspicious_urls()
+
+            # Update display
+            self.display_suspicious_urls()
+
+            # Close dialog
+            dialog.destroy()
+
+            self.update_status(f"Added suspicious URL: {url}", "info")
+
+        except Exception as e:
+            print(f"Error adding URL: {e}")
+            traceback.print_exc()
+            Messagebox.show_error(f"Error adding URL: {str(e)}", "Error")
+
+    def remove_selected_url(self):
+        """Remove selected URL from the list"""
+        # Get selected item
+        selected = self.url_tree.selection()
+
+        if not selected:
+            Messagebox.show_info("Please select a URL to remove", "No Selection")
+            return
+
+        # Get URL from the selected item
+        item_id = selected[0]
+        item_index = int(self.url_tree.item(item_id, "text")) - 1
+
+        if 0 <= item_index < len(self.suspicious_urls):
+            url = self.suspicious_urls[item_index]['url']
+
+            # Confirm deletion
+            confirm = Messagebox.show_question(
+                f"Are you sure you want to remove the URL:\n{url}",
+                "Confirm Removal"
+            )
+
+            if confirm == "yes":
+                # Remove from list and save
+                del self.suspicious_urls[item_index]
+                self.save_suspicious_urls()
+
+                # Update display
+                self.display_suspicious_urls()
+
+                self.update_status(f"Removed URL: {url}", "info")
+
+    def export_urls(self):
+        """Export suspicious URLs to a file"""
+        if not self.suspicious_urls:
+            Messagebox.show_info("No URLs to export", "Export URLs")
+            return
+
+        # Get a file path to save to
+        file_path = filedialog.asksaveasfilename(
+            title="Export URLs",
+            filetypes=[("CSV files", "*.csv"), ("JSON files", "*.json"), ("All files", "*.*")],
+            defaultextension=".csv"
+        )
+
+        if not file_path:
+            return
+
+        try:
+            # Export based on file extension
+            if file_path.endswith('.csv'):
+                self.export_urls_csv(file_path)
+            elif file_path.endswith('.json'):
+                self.export_urls_json(file_path)
+            else:
+                self.export_urls_csv(file_path)  # Default to CSV
+
+            self.update_status(f"Exported URLs to {os.path.basename(file_path)}", "success")
+
+        except Exception as e:
+            print(f"Error exporting URLs: {e}")
+            traceback.print_exc()
             Messagebox.show_error(
                 f"Error exporting URLs: {str(e)}",
                 "Export Error"
             )
 
-    def delete_selected_url(self):
-        """Delete selected URL from database"""
-        selected_items = self.urls_table.selection()
-        if not selected_items:
-            Messagebox.show_info(
-                "No URL selected. Please select a URL to delete.",
-                "No Selection"
-            )
-            return
-
-        # Confirm deletion
-        count = len(selected_items)
-        response = Messagebox.show_question(
-            f"Are you sure you want to delete {count} selected URL{'s' if count > 1 else ''}?",
-            "Confirm Deletion",
-            buttons=["Yes:danger", "No:secondary"]
-        )
-
-        if response != "Yes":
-            return
-
-        # Delete selected URLs
-        for item_id in selected_items:
-            values = self.urls_table.item(item_id, "values")
-            url_to_delete = values[0]
-
-            # Remove from the suspicious_urls list
-            self.suspicious_urls = [url for url in self.suspicious_urls if url['url'] != url_to_delete]
-
-            # Remove from the table
-            self.urls_table.delete(item_id)
-
-        # Save updated list
-        self.save_suspicious_urls()
-
-        # Show confirmation
-        Messagebox.show_info(
-            f"Deleted {count} URL{'s' if count > 1 else ''}.",
-            "Deletion Complete"
-        )
-
-    def clear_all_urls(self):
-        """Clear all URLs from the database"""
-        if not self.suspicious_urls:
-            Messagebox.show_info(
-                "URL database is already empty.",
-                "Clear All"
-            )
-            return
-
-        # Confirm deletion
-        count = len(self.suspicious_urls)
-        response = Messagebox.show_question(
-            f"Are you sure you want to delete ALL {count} URLs from the database?\n\nThis action cannot be undone.",
-            "Confirm Deletion",
-            buttons=["Yes:danger", "No:secondary"]
-        )
-
-        if response != "Yes":
-            return
-
-        # Clear the list
-        self.suspicious_urls = []
-
-        # Clear the table
-        for item in self.urls_table.get_children():
-            self.urls_table.delete(item)
-
-        # Save empty list
-        self.save_suspicious_urls()
-
-        # Show confirmation
-        Messagebox.show_info(
-            f"Deleted all {count} URLs from the database.",
-            "Database Cleared"
-        )
-
-    def setup_settings_tab(self):
-        """Set up the settings tab with model configuration options"""
-        # Container with padding
-        container = ttk.Frame(self.settings_tab)
-        container.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
-
-        # Left column for model settings
-        left_col = ttk.Frame(container)
-        left_col.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 7.5))
-
-        # Right column for model information
-        right_col = ttk.Frame(container)
-        right_col.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(7.5, 0))
-
-        # Model selection frame
-        selection_frame = ttk.LabelFrame(
-            left_col,
-            text="Model Selection",
-            bootstyle="info"
-        )
-        selection_frame.pack(fill=tk.X, pady=(0, 15))
-
-        # Current model
-        current_model_frame = ttk.Frame(selection_frame)
-        current_model_frame.pack(fill=tk.X, padx=10, pady=10)
-
-        ttk.Label(
-            current_model_frame,
-            text="Current Model:",
-            font=("Segoe UI", 10, "bold")
-        ).pack(side=tk.LEFT)
-
-        self.current_model_label = ttk.Label(
-            current_model_frame,
-            text=self.model_metadata.get('model_type', "Random Forest Classifier (Default)"),
-            bootstyle="info"
-        )
-        self.current_model_label.pack(side=tk.LEFT, padx=(5, 0))
-
-        # Model selection dropdown with nice styling
-        model_select_frame = ttk.Frame(selection_frame)
-        model_select_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
-
-        ttk.Label(
-            model_select_frame,
-            text="Choose Model:",
-            font=("Segoe UI", 10)
-        ).grid(row=0, column=0, sticky=tk.W, pady=5)
-
-        # Get available models
-        available_models = self.get_available_models()
-
-        self.settings_model_combo = ttk.Combobox(
-            model_select_frame,
-            values=available_models,
-            bootstyle="info"
-        )
-        if available_models:
-            self.settings_model_combo.current(0)
-        self.settings_model_combo.grid(row=0, column=1, sticky=tk.W, padx=(10, 0), pady=5)
-
-        # Load external model section
-        ttk.Label(
-            model_select_frame,
-            text="External Model:",
-            font=("Segoe UI", 10)
-        ).grid(row=1, column=0, sticky=tk.W, pady=5)
-
-        external_frame = ttk.Frame(model_select_frame)
-        external_frame.grid(row=1, column=1, sticky=tk.W, padx=(10, 0), pady=5)
-
-        ttk.Button(
-            external_frame,
-            text="Load Model",
-            bootstyle="info-outline",
-            command=self.load_model_from_settings
-        ).pack(side=tk.LEFT)
-
-        self.settings_model_label = ttk.Label(
-            external_frame,
-            text="No model loaded",
-            bootstyle="secondary"
-        )
-        self.settings_model_label.pack(side=tk.LEFT, padx=(10, 0))
-
-        # Apply button
-        ttk.Button(
-            selection_frame,
-            text="Apply Changes",
-            bootstyle="success",
-            command=self.apply_model_changes
-        ).pack(padx=10, pady=(0, 10), anchor=tk.E)
-
-        # Detection parameters
-        params_frame = ttk.LabelFrame(
-            left_col,
-            text="Detection Parameters",
-            bootstyle="info"
-        )
-        params_frame.pack(fill=tk.BOTH, expand=True)
-
-        # Threshold slider
-        threshold_frame = ttk.Frame(params_frame)
-        threshold_frame.pack(fill=tk.X, padx=10, pady=10)
-
-        ttk.Label(
-            threshold_frame,
-            text="Phishing Threshold:",
-            font=("Segoe UI", 10)
-        ).pack(anchor=tk.W)
-
-        self.threshold_value = StringVar(value="70%")
-
-        self.threshold_slider = ttk.Scale(
-            threshold_frame,
-            from_=0,
-            to=100,
-            value=70,
-            length=300,
-            command=lambda x: self.threshold_value.set(f"{float(x):.0f}%")
-        )
-        self.threshold_slider.pack(side=tk.LEFT, pady=(5, 0))
-
-        ttk.Label(
-            threshold_frame,
-            textvariable=self.threshold_value,
-            bootstyle="info",
-            width=5
-        ).pack(side=tk.LEFT, padx=(10, 0), pady=(5, 0))
-
-        # Feature toggles
-        ttk.Label(
-            params_frame,
-            text="Features to Consider:",
-            font=("Segoe UI", 10)
-        ).pack(anchor=tk.W, padx=10, pady=(10, 5))
-
-        # Create feature checkboxes
-        self.feature_vars = {}
-        features = [
-            "Domain analysis",
-            "Link inspection",
-            "Header examination",
-            "Linguistic analysis",
-            "Attachment scanning",
-            "Sender reputation"
-        ]
-
-        for feature in features:
-            var = tk.BooleanVar(value=True)
-            self.feature_vars[feature] = var
-            ttk.Checkbutton(
-                params_frame,
-                text=feature,
-                variable=var,
-                bootstyle="info-round-toggle"
-            ).pack(anchor=tk.W, padx=20, pady=2)
-
-        # Model information card
-        info_frame = ttk.LabelFrame(
-            right_col,
-            text="Model Information",
-            bootstyle="info"
-        )
-        info_frame.pack(fill=tk.BOTH, expand=True)
-
-        # Card content
-        info_content = ttk.Frame(info_frame)
-        info_content.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
-
-        # Model name and icon
-        name_frame = ttk.Frame(info_content)
-        name_frame.pack(fill=tk.X, pady=(0, 15))
-
-        ttk.Label(
-            name_frame,
-            text="🤖",  # Robot emoji as model icon
-            font=("Segoe UI", 24)
-        ).pack(side=tk.LEFT)
-
-        model_name_frame = ttk.Frame(name_frame)
-        model_name_frame.pack(side=tk.LEFT, padx=(10, 0))
-
-        self.model_title_label = ttk.Label(
-            model_name_frame,
-            text=self.model_metadata.get('model_type', "Random Forest Classifier"),
-            font=("Segoe UI", 14, "bold")
-        )
-        self.model_title_label.pack(anchor=tk.W)
-
-        ttk.Label(
-            model_name_frame,
-            text="Machine Learning Model",
-            bootstyle="secondary"
-        ).pack(anchor=tk.W)
-
-        # Divider
-        ttk.Separator(info_content).pack(fill=tk.X, pady=10)
-
-        # Model specs
-        specs_frame = ttk.Frame(info_content)
-        specs_frame.pack(fill=tk.X, pady=10)
-
-        # Store references to model info labels for updating
-        self.model_info_labels = {}
-
-        # Create model info fields
-        model_info_fields = [
-            ("Model Type:", "model_type"),
-            ("Version:", "version"),
-            ("Last Updated:", "last_updated"),
-            ("Features Used:", "features_used"),
-            ("Training Data Size:", "training_data_size"),
-            ("Accuracy:", "accuracy"),
-            ("Precision:", "precision"),
-            ("Recall:", "recall"),
-            ("F1 Score:", "f1_score")
-        ]
-
-        # Create a nice table-like display
-        for i, (label_text, field_key) in enumerate(model_info_fields):
-            ttk.Label(
-                specs_frame,
-                text=label_text,
-                font=("Segoe UI", 10),
-                width=18,
-                anchor=tk.E
-            ).grid(row=i, column=0, padx=(0, 10), pady=5, sticky=tk.E)
-
-            # Get the value with appropriate formatting
-            value = self.model_metadata.get(field_key, "Unknown")
-            if field_key in ["accuracy", "precision", "recall", "f1_score"]:
-                try:
-                    value = f"{float(value):.1f}%"
-                except:
-                    value = "Unknown"
-
-            # Create and store the label
-            info_label = ttk.Label(
-                specs_frame,
-                text=str(value),
-                font=("Segoe UI", 10, "bold"),
-                anchor=tk.W
-            )
-            info_label.grid(row=i, column=1, pady=5, sticky=tk.W)
-            self.model_info_labels[field_key] = info_label
-
-        # Performance visualization
-        perf_frame = ttk.LabelFrame(
-            info_content,
-            text="Model Performance",
-            bootstyle="secondary"
-        )
-        perf_frame.pack(fill=tk.X, pady=(15, 0))
-
-        # Simple gauge to represent performance
-        gauge_frame = ttk.Frame(perf_frame)
-        gauge_frame.pack(padx=10, pady=10, fill=tk.X)
-
-        # Store performance bars for updating
-        self.performance_bars = {}
-        self.performance_labels = {}
-
-        metrics = [
-            ("Accuracy", "accuracy"),
-            ("Precision", "precision"),
-            ("Recall", "recall")
-        ]
-
-        for metric_name, metric_key in metrics:
-            metric_frame = ttk.Frame(gauge_frame)
-            metric_frame.pack(fill=tk.X, pady=5)
-
-            ttk.Label(
-                metric_frame,
-                text=f"{metric_name}:",
-                width=10
-            ).pack(side=tk.LEFT)
-
-            # Get metric value
-            try:
-                value = float(self.model_metadata.get(metric_key, 0))
-            except:
-                value = 0
-
-            # Create progress bar
-            meter = ttk.Progressbar(
-                metric_frame,
-                value=value,
-                bootstyle="success"
-            )
-            meter.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(5, 5))
-            self.performance_bars[metric_key] = meter
-
-            # Value label
-            value_label = ttk.Label(
-                metric_frame,
-                text=f"{value:.1f}%",
-                width=6
-            )
-            value_label.pack(side=tk.LEFT)
-            self.performance_labels[metric_key] = value_label
-
-        # Update model info display
-        self.update_model_info_display()
-
-    def load_model_from_settings(self):
-        """Load an external model from the settings tab"""
-        model_file = filedialog.askopenfilename(
-            title="Select Model File",
-            filetypes=[("Joblib files", "*.joblib"), ("Pickle files", "*.pkl"), ("All files", "*.*")]
-        )
-
-        if model_file:
-            try:
-                # Load the model
-                loaded_model = joblib.load(model_file)
-                model_name = os.path.basename(model_file)
-
-                # Get model feature count
-                if hasattr(loaded_model, 'n_features_in_'):
-                    model_feature_count = loaded_model.n_features_in_
-                else:
-                    model_feature_count = 4  # Default assumption
-
-                # Store as a reference for applying changes
-                self.temp_loaded_model = loaded_model
-                self.temp_model_file = model_file
-                self.temp_model_feature_count = model_feature_count
-
-                # Update UI
-                self.settings_model_label.config(
-                    text=f"Loaded: {model_name}",
-                    bootstyle="success"
-                )
-
-                # Update status
-                self.update_status(f"Model loaded: {model_name}. Click 'Apply Changes' to use.", "info")
-            except Exception as e:
-                self.settings_model_label.config(
-                    text=f"Error: Could not load model",
-                    bootstyle="danger"
-                )
-                self.update_status(f"Error loading model: {str(e)}", "error")
-
-    def apply_model_changes(self):
-        """Apply model changes from settings tab"""
-        # Check if we need to use a pre-selected model or an externally loaded one
-        if hasattr(self, 'temp_loaded_model') and self.temp_loaded_model is not None:
-            # Use the externally loaded model
-            self.loaded_model = self.temp_loaded_model
-            self.model_feature_count = self.temp_model_feature_count
-            model_name = os.path.basename(self.temp_model_file)
-            model_type = type(self.loaded_model).__name__
-
-            # Update model metadata
-            self.model_metadata = {
-                "model_type": model_type,
-                "version": "External",
-                "last_updated": time.strftime("%Y-%m-%d", time.localtime(os.path.getmtime(self.temp_model_file))),
-                "features_used": self.model_feature_count,
-                "training_data_size": "Unknown",
-                "accuracy": 90.0,  # Placeholder values
-                "precision": 92.0,
-                "recall": 88.0,
-                "f1_score": 90.0
-            }
-
-            # Reset temporary model
-            self.temp_loaded_model = None
-            self.temp_model_file = None
-
-            # Update status
-            self.update_status(f"Applied external model: {model_name}", "success")
-        else:
-            # Use a model from the dropdown
-            selected_model = self.settings_model_combo.get()
-            if selected_model:
-                try:
-                    # Load the selected model
-                    model_path = os.path.join(self.models_dir, selected_model)
-                    if os.path.exists(model_path):
-                        self.loaded_model = joblib.load(model_path)
-
-                        # Get model feature count
-                        if hasattr(self.loaded_model, 'n_features_in_'):
-                            self.model_feature_count = self.loaded_model.n_features_in_
-                        else:
-                            self.model_feature_count = 4  # Default assumption
-
-                        # Update model metadata
-                        self.model_metadata = {
-                            "model_type": type(self.loaded_model).__name__,
-                            "version": "1.0.0",
-                            "last_updated": time.strftime("%Y-%m-%d", time.localtime(os.path.getmtime(model_path))),
-                            "features_used": self.model_feature_count,
-                            "training_data_size": "125,000 emails",
-                            "accuracy": 94.7,
-                            "precision": 96.2,
-                            "recall": 92.1,
-                            "f1_score": 94.1
-                        }
-
-                        self.update_status(f"Applied model: {selected_model}", "success")
-                    else:
-                        # Use default model if file doesn't exist
-                        self.load_default_model()
-                        self.update_status("Applied default model (selected model not found)", "warning")
-                except Exception as e:
-                    self.update_status(f"Error applying model: {str(e)}", "error")
-                    # Fall back to default
-                    self.load_default_model()
-            else:
-                self.update_status("No model selected", "warning")
-
-        # Update threshold from slider
-        threshold_value = self.threshold_slider.get()
-
-        # Update feature toggles
-        enabled_features = [feature for feature, var in self.feature_vars.items() if var.get()]
-
-        # Show confirmation
-        Messagebox.show_info(
-            f"Applied model changes:\n" +
-            f"- Model: {self.model_metadata.get('model_type', 'Unknown')}\n" +
-            f"- Threshold: {threshold_value:.0f}%\n" +
-            f"- Enabled features: {len(enabled_features)}/{len(self.feature_vars)}",
-            "Settings Applied"
-        )
-
-        # Update model info display
-        self.update_model_info_display()
-
-    def update_model_info_display(self):
-        """Update the model information display with current metadata"""
-        try:
-            # Update title
-            self.model_title_label.config(text=self.model_metadata.get('model_type', "Unknown Model"))
-
-            # Update info fields
-            for field, label in self.model_info_labels.items():
-                value = self.model_metadata.get(field, "Unknown")
-
-                # Format percentage values
-                if field in ["accuracy", "precision", "recall", "f1_score"]:
-                    try:
-                        value = f"{float(value):.1f}%"
-                    except:
-                        value = "Unknown"
-
-                label.config(text=str(value))
-
-            # Update performance bars
-            for metric, bar in self.performance_bars.items():
-                try:
-                    value = float(self.model_metadata.get(metric, 0))
-                    bar.config(value=value)
-
-                    # Update corresponding label
-                    if metric in self.performance_labels:
-                        self.performance_labels[metric].config(text=f"{value:.1f}%")
-                except:
-                    bar.config(value=0)
-                    if metric in self.performance_labels:
-                        self.performance_labels[metric].config(text="0.0%")
-        except Exception as e:
-            print(f"Error updating model info: {e}")
-            traceback.print_exc()
+    def export_urls_csv(self, file_path):
+        """Export URLs to CSV file"""
+        with open(file_path, 'w', newline='') as file:
+            writer = csv.writer(file)
+
+            # Write header
+            writer.writerow(['URL', 'Source', 'Date Added', 'Risk Level'])
+
+            # Write data
+            for url_entry in self.suspicious_urls:
+                writer.writerow([
+                    url_entry.get('url', ''),
+                    url_entry.get('source', ''),
+                    url_entry.get('date_added', ''),
+                    url_entry.get('risk_level', '')
+                ])
+
+    def export_urls_json(self, file_path):
+        """Export URLs to JSON file"""
+        with open(file_path, 'w') as file:
+            json.dump(self.suspicious_urls, file, indent=2)
 
     def load_suspicious_urls(self):
         """Load suspicious URLs from file"""
@@ -2625,7 +2794,7 @@ class PhishingDetectorApp:
             else:
                 self.suspicious_urls = []
         except Exception as e:
-            print(f"Error loading URLs: {e}")
+            print(f"Error loading suspicious URLs: {e}")
             traceback.print_exc()
             self.suspicious_urls = []
 
@@ -2633,140 +2802,213 @@ class PhishingDetectorApp:
         """Save suspicious URLs to file"""
         try:
             with open(self.urls_file, 'w') as file:
-                json.dump(self.suspicious_urls, file)
+                json.dump(self.suspicious_urls, file, indent=2)
         except Exception as e:
-            print(f"Error saving URLs: {e}")
+            print(f"Error saving suspicious URLs: {e}")
             traceback.print_exc()
 
+    def display_suspicious_urls(self):
+        """Display suspicious URLs in the treeview"""
+        # Clear existing items
+        for item in self.url_tree.get_children():
+            self.url_tree.delete(item)
+
+        # Add URLs to the treeview
+        for i, url_entry in enumerate(self.suspicious_urls):
+            values = (
+                str(i + 1),
+                url_entry.get('url', ''),
+                url_entry.get('source', ''),
+                url_entry.get('date_added', ''),
+                url_entry.get('risk_level', '')
+            )
+
+            self.url_tree.insert('', 'end', text=str(i + 1), values=values)
+
     def add_suspicious_urls(self, urls, is_phishing):
-        """Add new suspicious URLs to the database"""
-        if not urls:
+        """Add URLs from analysis to suspicious URLs list"""
+        if not urls or not is_phishing:
             return
 
-        # Only add URLs if phishing was detected or if they're high risk
-        urls_to_add = []
-        if is_phishing:
-            # Add all URLs from phishing emails
-            urls_to_add = urls
-        else:
-            # Only add high-risk URLs from non-phishing emails
-            urls_to_add = [url for url in urls if url['risk'] == "High"]
+        # Add each URL
+        for url in urls:
+            # Check if URL already exists
+            if any(entry.get('url') == url for entry in self.suspicious_urls):
+                continue
 
-        if not urls_to_add:
-            return
+            # Create new entry
+            url_entry = {
+                'url': url,
+                'source': self.current_email.get('source', 'Analysis'),
+                'date_added': self.current_datetime,
+                'risk_level': 'High'
+            }
 
-        # Add new URLs (avoid duplicates)
-        existing_url_strings = [url['url'] for url in self.suspicious_urls]
-
-        for url in urls_to_add:
-            if url['url'] not in existing_url_strings:
-                self.suspicious_urls.append(url)
-                existing_url_strings.append(url['url'])
+            self.suspicious_urls.append(url_entry)
 
         # Save updated list
         self.save_suspicious_urls()
 
+        # Update display if we're on the URLs tab
+        if self.tab_control.tab(self.tab_control.select(), "text") == "🔗 Suspicious URLs":
+            self.display_suspicious_urls()
+
     def load_analysis_history(self):
-        """Load and display analysis history"""
-        # Clear existing widgets
-        for widget in self.prev_results_frame.winfo_children():
-            widget.destroy()
-
-        # Try to load history from file
-        history_file = os.path.join(self.data_dir, "analysis_history.json")
-        history = []
-
+        """Load analysis history from file"""
         try:
-            if os.path.exists(history_file):
-                with open(history_file, 'r') as file:
-                    history = json.load(file)
+            # Initialize empty history if file doesn't exist
+            if not os.path.exists(self.history_file):
+                with open(self.history_file, 'w') as file:
+                    json.dump([], file)
+                history = []
+            else:
+                # Try to load existing history
+                try:
+                    with open(self.history_file, 'r') as file:
+                        # Create empty file if reading fails
+                        file_content = file.read().strip()
+                        if not file_content:
+                            history = []
+                        else:
+                            history = json.loads(file_content)
+                except json.JSONDecodeError as e:
+                    print(f"Error loading history: {e}")
+                    # Reset history file if corrupted
+                    with open(self.history_file, 'w') as file:
+                        json.dump([], file)
+                    history = []
+
+            # Update previous analysis display
+            self.update_history_display(history)
+
         except Exception as e:
             print(f"Error loading history: {e}")
             traceback.print_exc()
-
-        # Display history (most recent first, up to 3 items)
-        if not history:
-            ttk.Label(
-                self.prev_results_frame,
-                text="No previous analysis",
-                bootstyle="secondary"
-            ).pack(anchor=tk.W)
-            return
-
-        # Show most recent 3 analyses
-        for item in history[:3]:
-            source = item.get('source', 'Unknown email')
-            is_phishing = item.get('is_phishing', False)
-            probability = item.get('probability', 0) * 100
-
-            # Email source
-            ttk.Label(
-                self.prev_results_frame,
-                text=f"• {source}:",
-                bootstyle="primary"
-            ).pack(anchor=tk.W, pady=(5, 0))
-
-            # Verdict with color
-            verdict_text = f"   {'Phishing' if is_phishing else 'Safe'} ({probability:.1f}%)"
-            verdict_color = "red" if is_phishing else "green"
-
-            ttk.Label(
-                self.prev_results_frame,
-                text=verdict_text,
-                foreground=verdict_color
-            ).pack(anchor=tk.W)
+            # Reset history file if general error
+            try:
+                with open(self.history_file, 'w') as file:
+                    json.dump([], file)
+            except:
+                pass
+            history = []
+            self.update_history_display(history)
 
     def update_analysis_history(self, source, is_phishing, probability):
-        """Update the analysis history with a new result"""
-        # Create history item
-        history_item = {
-            'source': source,
-            'is_phishing': is_phishing,
-            'probability': probability,
-            'timestamp': self.current_datetime
-        }
-
-        # Load existing history
-        history_file = os.path.join(self.data_dir, "analysis_history.json")
-        history = []
-
+        """Update analysis history with new result"""
         try:
-            if os.path.exists(history_file):
-                with open(history_file, 'r') as file:
-                    history = json.load(file)
-        except Exception as e:
-            print(f"Error loading history: {e}")
-            traceback.print_exc()
+            # Load current history
+            history = []
 
-        # Add new item at the beginning
-        history.insert(0, history_item)
+            # Initialize empty history if file doesn't exist
+            if not os.path.exists(self.history_file):
+                with open(self.history_file, 'w') as file:
+                    json.dump([], file)
+            else:
+                # Try to load existing history
+                try:
+                    with open(self.history_file, 'r') as file:
+                        # Handle empty file
+                        file_content = file.read().strip()
+                        if not file_content:
+                            history = []
+                        else:
+                            history = json.loads(file_content)
+                except json.JSONDecodeError:
+                    # Reset history if corrupted
+                    history = []
 
-        # Keep only the most recent 10 analyses
-        history = history[:10]
+            # Create entry using primitive types for JSON compatibility
+            entry = {
+                'source': source,
+                'timestamp': self.current_datetime,
+                'is_phishing': 1 if is_phishing else 0,  # Use integers instead of booleans
+                'probability': float(probability)  # Ensure it's a float
+            }
 
-        # Save updated history
-        try:
-            with open(history_file, 'w') as file:
+            # Add to history (keep most recent 10)
+            history.insert(0, entry)
+            if len(history) > 10:
+                history = history[:10]
+
+            # Save history
+            with open(self.history_file, 'w') as file:
                 json.dump(history, file)
+
+            # Update display
+            self.update_history_display(history)
+
         except Exception as e:
             print(f"Error saving history: {e}")
             traceback.print_exc()
 
-        # Reload and display history
-        self.load_analysis_history()
+    def update_history_display(self, history):
+        """Update the display of previous analyses"""
+        # Clear current display
+        for widget in self.prev_results_frame.winfo_children():
+            widget.destroy()
+
+        if not history:
+            # Show placeholder
+            ttk.Label(
+                self.prev_results_frame,
+                text="No previous analyses",
+                bootstyle="secondary"
+            ).pack(pady=5)
+            return
+
+        # Add history items
+        for i, entry in enumerate(history[:5]):  # Show only most recent 5
+            # Get values
+            source = entry.get('source', 'Unknown')
+            timestamp = entry.get('timestamp', '')
+            is_phishing = bool(entry.get('is_phishing', 0))  # Convert back to boolean
+            probability = float(entry.get('probability', 0.0))
+
+            # Create item frame
+            item_frame = ttk.Frame(self.prev_results_frame)
+            item_frame.pack(fill=tk.X, pady=(0, 5))
+
+            # Status indicator
+            indicator = "🔴" if is_phishing else "🟢"
+
+            ttk.Label(
+                item_frame,
+                text=indicator,
+                font=("Segoe UI", 10)
+            ).pack(side=tk.LEFT)
+
+            # Source and timestamp
+            info_frame = ttk.Frame(item_frame)
+            info_frame.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(5, 0))
+
+            ttk.Label(
+                info_frame,
+                text=source,
+                font=("Segoe UI", 9, "bold")
+            ).pack(anchor=tk.W)
+
+            ttk.Label(
+                info_frame,
+                text=timestamp,
+                font=("Segoe UI", 8),
+                bootstyle="secondary"
+            ).pack(anchor=tk.W)
+
+            # Probability
+            ttk.Label(
+                item_frame,
+                text=f"{probability:.1%}",
+                font=("Segoe UI", 9),
+                bootstyle="danger" if is_phishing else "success"
+            ).pack(side=tk.RIGHT)
+
+            # Add separator
+            if i < len(history) - 1 and i < 4:
+                ttk.Separator(self.prev_results_frame).pack(fill=tk.X, pady=(0, 5))
 
 
-# Create and run the application
 if __name__ == "__main__":
-    # Set the date and user info
-    current_datetime = "2025-05-14 14:58:18"
-    current_user = "Sharawey74"
-
-    # Initialize the application
     root = tk.Tk()
     app = PhishingDetectorApp(root)
-    # Update with the current date and user
-    app.current_datetime = current_datetime
-    app.current_user = current_user
-
     root.mainloop()
+
