@@ -1,0 +1,68 @@
+Phase 1: Core Infrastructure
+1.	Database Setup
+o	Create config/database.php with PDO connection
+o	Test connection with test_db.php script
+o	Verify tables exist (match your FinalDB.sql)
+2.	Authentication System
+o	Implement src/Controller/AuthController.php
+o	Create templates/auth/login.php
+o	Set up src/Service/AuthService.php
+o	Configure src/Util/PasswordHasher.php
+3.	Session Management
+o	Build src/Util/SessionManager.php
+o	Implement role-based access control
+o	Add logout functionality
+________________________________________
+Phase 2: Data Entry Modules
+4.	Branch User Features
+o	src/Controller/BranchController.php
+o	Templates:
+	templates/branch/dashboard.php
+	templates/branch/production_entry.php
+o	DAOs:
+	src/Dao/CoffeeProductionDao.php
+	src/Dao/CoffeeDistributionDao.php
+5.	Form Processing
+o	Create models:
+	src/Model/CoffeeProduction.php
+	src/Model/CoffeeDistribution.php
+o	Add validation logic
+________________________________________
+Phase 3: Reporting & Analytics
+6.	Emission Calculations
+o	Implement src/Util/EmissionCalculator.php
+o	Create src/Service/CarbonFootprintService.php
+7.	Basic Reports
+o	Build src/Controller/ReportController.php
+o	Create templates/reports/emissions_report.php
+o	Add Chart.js integration
+________________________________________
+Phase 4: Management Features
+8.	OP Manager Dashboard
+o	src/Controller/OPManagerController.php
+o	templates/op_manager/dashboard.php
+o	Aggregate branch data
+9.	Reduction Strategies
+o	Implement src/Service/ReductionStrategyService.php
+o	Create strategy submission form
+________________________________________
+Phase 5: Advanced Features
+10.	Notifications
+o	Build src/Service/NotificationService.php
+o	Add threshold alerts
+11.	PDF Reports
+o	Integrate TCPDF in src/Service/ReportGenerationService.php
+12.	Localization
+o	Configure src/Service/LanguageService.php
+o	Update locale/en/messages.php and locale/ar/messages.php
+________________________________________
+Phase 6: Testing & Deployment
+13.	Unit Tests
+o	Create basic tests in tests/ directory
+14.	Security Audit
+o	Sanitize all user inputs
+o	Implement CSRF protection
+15.	Deployment
+o	Configure .htaccess for clean URLs
+o	Set up production database credentials
+
