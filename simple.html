@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JavaScript Display Methods Comparison</title>
+</head>
+<body>
+    <h2>JavaScript Display Methods Comparison</h2>
+    
+    <!-- innerHTML Example -->
+    <p id="demo">Original content</p>
+    <button onclick="innerHTMLExample()">innerHTML</button>
+    
+    <!-- document.write() Example -->
+    <button onclick="documentWriteExample()">document.write()</button>
+    
+    <!-- alert() Example -->
+    <button onclick="alertExample()">alert()</button>
+    
+    <!-- console.log() Example -->
+    <button onclick="consoleLogExample()">console.log()</button>
+    
+    <!-- confirm() Example -->
+    <button onclick="confirmExample()">confirm()</button>
+    
+    <!-- prompt() Example -->
+    <button onclick="promptExample()">prompt()</button>
+
+    <script>
+        function innerHTMLExample() {
+            document.getElementById("demo").innerHTML = "Content changed!";
+        }
+
+        function documentWriteExample() {
+            document.write("<h3>Page overwritten!</h3>");
+        }
+
+        function alertExample() {
+            alert("This is an alert box!");
+        }
+
+        function consoleLogExample() {
+            console.log("Message logged to console");
+        }
+
+        function confirmExample() {
+            const result = confirm("Proceed?");
+            alert(result ? "OK clicked" : "Cancel clicked");
+        }
+
+        function promptExample() {
+            const name = prompt("Enter your name:", "Guest");
+            alert(name ? `Hello, ${name}!` : "No name entered");
+        }
+    </script>
+</body>
+</html>

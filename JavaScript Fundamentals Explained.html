@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JavaScript Fundamentals Explained</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        :root {
+            --primary: #1a237e;
+            --secondary: #4a148c;
+            --accent1: #ff6f00;
+            --accent2: #00bcd4;
+            --dark: #121212;
+            --light: #f5f5f5;
+        }
+        
+        body {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: var(--light);
+            min-height: 100vh;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            text-align: center;
+            padding: 40px 0;
+            margin-bottom: 30px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+        }
+        
+        h1 {
+            font-size: 3.5rem;
+            margin-bottom: 15px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+            color: #ffd54f;
+        }
+        
+        .subtitle {
+            font-size: 1.6rem;
+            opacity: 0.9;
+            max-width: 800px;
+            margin: 0 auto;
+            color: #e0f7fa;
+        }
+        
+        .content-section {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+        }
+        
+        h2 {
+            font-size: 2.4rem;
+            margin-bottom: 25px;
+            color: var(--accent2);
+            border-bottom: 3px solid var(--accent2);
+            padding-bottom: 10px;
+        }
+        
+        h3 {
+            font-size: 1.8rem;
+            margin-bottom: 15px;
+            color: #ffd54f;
+        }
+        
+        .card-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 25px;
+            margin-top: 25px;
+        }
+        
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+            background: rgba(255, 255, 255, 0.15);
+        }
+        
+        .example {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 1.1rem;
+            overflow-x: auto;
+            border-left: 3px solid var(--accent1);
+        }
+        
+        .output {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-family: 'Courier New', monospace;
+            min-height: 60px;
+            border-left: 3px solid var(--accent2);
+        }
+        
+        .btn {
+            display: inline-block;
+            background: linear-gradient(to right, var(--accent1), #ffa000);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            margin-top: 15px;
+            border-radius: 50px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+        
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+            background: linear-gradient(to right, #ffa000, var(--accent1));
+        }
+        
+        .input-group {
+            margin: 15px 0;
+        }
+        
+        input[type="number"], select {
+            width: 100%;
+            padding: 12px;
+            border-radius: 6px;
+            border: none;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 1rem;
+            margin-top: 8px;
+        }
+        
+        input:focus, select:focus {
+            outline: none;
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .operator-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .operator-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        
+        .operator-card h4 {
+            font-size: 1.3rem;
+            color: var(--accent1);
+            margin-bottom: 10px;
+        }
+        
+        .operator-card p {
+            font-size: 1.1rem;
+        }
+        
+        .code-block {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 1rem;
+            overflow-x: auto;
+        }
+        
+        .function-visual {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        
+        .function-step {
+            display: flex;
+            align-items: center;
+            margin: 15px 0;
+        }
+        
+        .step-number {
+            background: var(--accent1);
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 15px;
+            font-weight: bold;
+        }
+        
+        .loop-visual {
+            display: flex;
+            justify-content: center;
+            margin: 20px 0;
+        }
+        
+        .loop-circle {
+            width: 300px;
+            height: 300px;
+            border: 3px solid var(--accent1);
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            animation: rotate 10s linear infinite;
+        }
+        
+        .loop-step {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background: var(--accent2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: var(--dark);
+        }
+        
+        @keyframes rotate {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .loop-step-1 {
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        
+        .loop-step-2 {
+            top: 50%;
+            right: 10px;
+            transform: translateY(-50%);
+        }
+        
+        .loop-step-3 {
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        
+        .loop-step-4 {
+            top: 50%;
+            left: 10px;
+            transform: translateY(-50%);
+        }
+        
+        .loop-execution-text {
+            font-weight: bold;
+            text-align: center;
+        }
+        
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        
+        .comparison-table th, .comparison-table td {
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 12px;
+            text-align: left;
+        }
+        
+        .comparison-table th {
+            background: rgba(0, 0, 0, 0.4);
+            color: var(--accent2);
+        }
+        
+        .comparison-table tr:nth-child(even) {
+            background: rgba(255, 255, 255, 0.05);
+        }
+        
+        footer {
+            text-align: center;
+            padding: 30px 0;
+            margin-top: 30px;
+            font-size: 1.1rem;
+            opacity: 0.8;
+        }
+        
+        @media (max-width: 768px) {
+            .card-container {
+                grid-template-columns: 1fr;
+            }
+            
+            h1 {
+                font-size: 2.5rem;
+            }
+            
+            h2 {
+                font-size: 1.8rem;
+            }
+            
+            .loop-circle {
+                width: 200px;
+                height: 200px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>JavaScript Fundamentals Explained</h1>
+            <p class="subtitle">Operators, Conditionals, Loops, and Functions</p>
+        </header>
+        
+        <!-- Operators Section -->
+        <section class="content-section">
+            <h2>JavaScript Operators</h2>
+            
+            <h3>Arithmetic Operators</h3>
+            <div class="operator-grid">
+                <div class="operator-card">
+                    <h4>+</h4>
+                    <p>Addition</p>
+                    <div class="example">5 + 3 = 8</div>
+                </div>
+                <div class="operator-card">
+                    <h4>-</h4>
+                    <p>Subtraction</p>
+                    <div class="example">10 - 4 = 6</div>
+                </div>
+                <div class="operator-card">
+                    <h4>*</h4>
+                    <p>Multiplication</p>
+                    <div class="example">6 * 7 = 42</div>
+                </div>
+                <div class="operator-card">
+                    <h4>/</h4>
+                    <p>Division</p>
+                    <div class="example">20 / 5 = 4</div>
+                </div>
+                <div class="operator-card">
+                    <h4>%</h4>
+                    <p>Modulus (Remainder)</p>
+                    <div class="example">10 % 3 = 1</div>
+                </div>
+                <div class="operator-card">
+                    <h4>++</h4>
+                    <p>Increment</p>
+                    <div class="example">i++ (i = i + 1)</div>
+                </div>
+                <div class="operator-card">
+                    <h4>--</h4>
+                    <p>Decrement</p>
+                    <div class="example">i-- (i = i - 1)</div>
+                </div>
+            </div>
+            
+            <h3>Assignment Operator</h3>
+            <div class="example">
+                let x = 10; // Assigns value 10 to variable x<br>
+                x += 5;    // Equivalent to x = x + 5 → 15<br>
+                x *= 2;    // Equivalent to x = x * 2 → 30
+            </div>
+            
+            <h3>Comparison Operators</h3>
+            <table class="comparison-table">
+                <tr>
+                    <th>Operator</th>
+                    <th>Name</th>
+                    <th>Example</th>
+                    <th>Result</th>
+                </tr>
+                <tr>
+                    <td>==</td>
+                    <td>Equal to the value ?</td>
+                    <td>5 == '5'</td>
+                    <td>true</td>
+                </tr>
+                <tr>
+                    <td>===</td>
+                    <td>Strict equal to the value and type ?</td>
+                    <td>5 === '5'</td>
+                    <td>false</td>
+                </tr>
+                <tr>
+                    <td>!=</td>
+                    <td>Not equal</td>
+                    <td>5 != 3</td>
+                    <td>true</td>
+                </tr>
+                <tr>
+                    <td>!==</td>
+                    <td>Strict not equal</td>
+                    <td>5 !== '5'</td>
+                    <td>true</td>
+                </tr>
+                <tr>
+                    <td>></td>
+                    <td>Greater than</td>
+                    <td>10 > 5</td>
+                    <td>true</td>
+                </tr>
+                <tr>
+                    <td><</td>
+                    <td>Less than</td>
+                    <td>10 < 5</td>
+                    <td>false</td>
+                </tr>
+                <tr>
+                    <td>>=</td>
+                    <td>Greater than or equal</td>
+                    <td>10 >= 10</td>
+                    <td>true</td>
+                </tr>
+                <tr>
+                    <td><=</td>
+                    <td>Less than or equal</td>
+                    <td>10 <= 5</td>
+                    <td>false</td>
+                </tr>
+            </table>
+            
+            <h3>Logical Operators</h3>
+            <div class="operator-grid">
+                <div class="operator-card">
+                    <h4>&&</h4>
+                    <p>Logical AND</p>
+                    <div class="example">(true && false) → false</div>
+                </div>
+                <div class="operator-card">
+                    <h4>||</h4>
+                    <p>Logical OR</p>
+                    <div class="example">(true || false) → true</div>
+                </div>
+                <div class="operator-card">
+                    <h4>!</h4>
+                    <p>Logical NOT</p>
+                    <div class="example">!true → false</div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Conditional Statements Section -->
+        <section class="content-section">
+            <h2>Conditional Statements</h2>
+            
+            <div class="card-container">
+                <div class="card">
+                    <h3>if Statement</h3>
+                    <div class="example">
+                        let age = 18;<br>
+                        if (age >= 18) {<br>
+                        &nbsp;&nbsp;console.log("You're an adult");<br>
+                        }
+                    </div>
+                    <button class="btn" onclick="runIfStatement()">Run Example</button>
+                    <div class="output" id="ifOutput"></div>
+                </div>
+                
+                <div class="card">
+                    <h3>else if Statement</h3>
+                    <div class="example">
+                        let score = 85;<br>
+                        if (score >= 90) {<br>
+                        &nbsp;&nbsp;grade = "A";<br>
+                        } else if (score >= 80) {<br>
+                        &nbsp;&nbsp;grade = "B";<br>
+                        } else {<br>
+                        &nbsp;&nbsp;grade = "C";<br>
+                        }
+                    </div>
+                    <button class="btn" onclick="runElseIfStatement()">Run Example</button>
+                    <div class="output" id="elseIfOutput"></div>
+                </div>
+                
+                <div class="card">
+                    <h3>switch Statement</h3>
+                    <div class="example">
+                        let day = 3;<br>
+                        switch(day) {<br>
+                        &nbsp;&nbsp;case 1: dayName = "Monday"; break;<br>
+                        &nbsp;&nbsp;case 2: dayName = "Tuesday"; break;<br>
+                        &nbsp;&nbsp;case 3: dayName = "Wednesday"; break;<br>
+                        &nbsp;&nbsp;default: dayName = "Invalid";<br>
+                        }
+                    </div>
+                    <button class="btn" onclick="runSwitchStatement()">Run Example</button>
+                    <div class="output" id="switchOutput"></div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Looping Statements Section -->
+        <section class="content-section">
+            <h2>Looping Statements</h2>
+            
+            <div class="card-container">
+                <div class="card">
+                    <h3>for Loop</h3>
+                    <div class="example">
+                        for (let i = 0; i < 5; i++) {<br>
+                        &nbsp;&nbsp;console.log("Iteration: " + i);<br>
+                        }
+                    </div>
+                    <button class="btn" onclick="runForLoop()">Run Loop</button>
+                    <div class="output" id="forLoopOutput"></div>
+                </div>
+                
+                    <div class="loop-step loop-step-1">1</div>
+                    <div class="loop-step loop-step-2">2</div>
+                    <div class="loop-step loop-step-3">3</div>
+                    <div class="loop-step loop-step-4">4</div>
+                    <div class="loop-execution-text">Loop Execution</div>
+                        &nbsp;&nbsp;console.log("Count: " + i);<br>
+                        &nbsp;&nbsp;i++;<br>
+                        }
+                    </div>
+                    <button class="btn" onclick="runWhileLoop()">Run Loop</button>
+                    <div class="output" id="whileLoopOutput"></div>
+                </div>
+                
+                <div class="card">
+                    <h3>do...while Loop</h3>
+                    <div class="example">
+                        let i = 0;<br>
+                        do {<br>
+                        &nbsp;&nbsp;console.log("Value: " + i);<br>
+                        &nbsp;&nbsp;i++;<br>
+                        } while (i < 5);
+                    </div>
+                    <button class="btn" onclick="runDoWhileLoop()">Run Loop</button>
+                    <div class="output" id="doWhileLoopOutput"></div>
+                </div>
+            </div>
+            
+            <div class="loop-visual">
+                <div class="loop-circle">
+                    <div class="loop-step loop-step-1">1</div>
+                    <div class="loop-step loop-step-2">2</div>
+                    <div class="loop-step loop-step-3">3</div>
+                    <div class="loop-step loop-step-4">4</div>
+                    <div class="loop-execution-text">Loop Execution</div>
+                </div>
+            </div>
+            
+            <h3>Break and Continue</h3>
+            <div class="card-container">
+                <div class="card">
+                    <h3>break Statement</h3>
+                    <div class="example">
+                        for (let i = 0; i < 10; i++) {<br>
+                        &nbsp;&nbsp;if (i === 5) break;<br>
+                        &nbsp;&nbsp;console.log(i);<br>
+                        }<br>
+                        // Output: 0,1,2,3,4
+                    </div>
+                    <button class="btn" onclick="runBreakExample()">Run Example</button>
+                    <div class="output" id="breakOutput"></div>
+                </div>
+                
+                <div class="card">
+                    <h3>continue Statement</h3>
+                    <div class="example">
+                        for (let i = 0; i < 5; i++) {<br>
+                        &nbsp;&nbsp;if (i === 2) continue;<br>
+                        &nbsp;&nbsp;console.log(i);<br>
+                        }<br>
+                        // Output: 0,1,3,4
+                    </div>
+                    <button class="btn" onclick="runContinueExample()">Run Example</button>
+                    <div class="output" id="continueOutput"></div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Functions Section -->
+        <section class="content-section">
+            <h2>Functions</h2>
+            
+            <div class="function-visual">
+                <div class="function-step">
+                    <div class="step-number">1</div>
+                    <div>Function Declaration</div>
+                </div>
+                <div class="code-block">
+                    function addNumbers(a, b) {<br>
+                    &nbsp;&nbsp;return a + b;<br>
+                    }
+                </div>
+                
+                <div class="function-step">
+                    <div class="step-number">2</div>
+                    <div>Function Call</div>
+                </div>
+                <div class="code-block">
+                    let result = addNumbers(5, 3);<br>
+                    // result = 8
+                </div>
+                
+                <div class="function-step">
+                    <div class="step-number">3</div>
+                    <div>Parameters and Return Value</div>
+                </div>
+                <div class="code-block">
+                    function greet(name) {<br>
+                    &nbsp;&nbsp;return "Hello, " + name + "!";<br>
+                    }<br>
+                    <br>
+                    let message = greet("Alice");<br>
+                    // message = "Hello, Alice!"
+                </div>
+            </div>
+            
+            <div class="card-container">
+                <div class="card">
+                    <h3>Function Calculator</h3>
+                    <div class="input-group">
+                        <label for="num1">First Number:</label>
+                        <input type="number" id="num1" value="10">
+                    </div>
+                    <div class="input-group">
+                        <label for="num2">Second Number:</label>
+                        <input type="number" id="num2" value="5">
+                    </div>
+                    <div class="input-group">
+                        <label for="operation">Operation:</label>
+                        <select id="operation">
+                            <option value="add">Addition (+)</option>
+                            <option value="subtract">Subtraction (-)</option>
+                            <option value="multiply">Multiplication (*)</option>
+                            <option value="divide">Division (/)</option>
+                        </select>
+                    </div>
+                    <button class="btn" onclick="calculate()">Calculate</button>
+                    <div class="output" id="calcOutput">Result will appear here</div>
+                </div>
+                
+                <div class="card">
+                    <h3>Function Examples</h3>
+                    <div class="example">
+                        // Function with multiple parameters<br>
+                        function multiply(a, b) {<br>
+                        &nbsp;&nbsp;return a * b;<br>
+                        }<br><br>
+                        
+                        // Function without parameters<br>
+                        function sayHello() {<br>
+                        &nbsp;&nbsp;return "Hello, World!";<br>
+                        }<br><br>
+                        
+                        // Function with conditional logic<br>
+                        function isEven(num) {<br>
+                        &nbsp;&nbsp;return num % 2 === 0;<br>
+                        }
+                    </div>
+                    <button class="btn" onclick="runFunctionExamples()">Run Examples</button>
+                    <div class="output" id="functionOutput"></div>
+                </div>
+            </div>
+        </section>
+        
+        <footer>
+            <p>JavaScript Fundamentals Explained &bull; Created with HTML, CSS, and JavaScript</p>
+            <p>All concepts demonstrated with interactive examples</p>
+        </footer>
+    </div>
+
+    <script>
+        // Conditional Statements Examples
+        function runIfStatement() {
+            let age = 18;
+            let output = "";
+            if (age >= 18) {
+                output = "You're an adult!";
+            } else {
+                output = "You're not an adult yet!";
+            }
+            document.getElementById("ifOutput").innerHTML = output;
+        }
+        
+        function runElseIfStatement() {
+            let score = 85;
+            let grade;
+            if (score >= 90) {
+                grade = "A";
+            } else if (score >= 80) {
+                grade = "B";
+            } else if (score >= 70) {
+                grade = "C";
+            } else if (score >= 60) {
+                grade = "D";
+            } else {
+                grade = "F";
+            }
+            document.getElementById("elseIfOutput").innerHTML = 
+                `Score: ${score} → Grade: ${grade}`;
+        }
+        
+        function runSwitchStatement() {
+            let day = 3;
+            let dayName;
+            switch(day) {
+                case 1:
+                    dayName = "Monday";
+                    break;
+                case 2:
+                    dayName = "Tuesday";
+                    break;
+                case 3:
+                    dayName = "Wednesday";
+                    break;
+                case 4:
+                    dayName = "Thursday";
+                    break;
+                case 5:
+                    dayName = "Friday";
+                    break;
+                case 6:
+                    dayName = "Saturday";
+                    break;
+                case 7:
+                    dayName = "Sunday";
+                    break;
+                default:
+                    dayName = "Invalid day";
+            }
+            document.getElementById("switchOutput").innerHTML = 
+                `Day number: ${day} → ${dayName}`;
+        }
+        
+        // Loop Examples
+        function runForLoop() {
+            let output = "";
+            for (let i = 0; i < 5; i++) {
+                output += `Iteration: ${i}<br>`;
+            }
+            document.getElementById("forLoopOutput").innerHTML = output;
+        }
+        
+        function runWhileLoop() {
+            let output = "";
+            let i = 0;
+            while (i < 5) {
+                output += `Count: ${i}<br>`;
+                i++;
+            }
+            document.getElementById("whileLoopOutput").innerHTML = output;
+        }
+        
+        function runDoWhileLoop() {
+            let output = "";
+            let i = 0;
+            do {
+                output += `Value: ${i}<br>`;
+                i++;
+            } while (i < 5);
+            document.getElementById("doWhileLoopOutput").innerHTML = output;
+        }
+        
+        function runBreakExample() {
+            let output = "";
+            for (let i = 0; i < 10; i++) {
+                if (i === 5) break;
+                output += `${i} `;
+            }
+            document.getElementById("breakOutput").innerHTML = 
+                `Loop broke at 5: ${output}`;
+        }
+        
+        function runContinueExample() {
+            let output = "";
+            for (let i = 0; i < 5; i++) {
+                if (i === 2) continue;
+                output += `${i} `;
+            }
+            document.getElementById("continueOutput").innerHTML = 
+                `Skipped 2: ${output}`;
+        }
+        
+        // Function Examples
+        function calculate() {
+            const num1 = parseFloat(document.getElementById("num1").value);
+            const num2 = parseFloat(document.getElementById("num2").value);
+            const operation = document.getElementById("operation").value;
+            
+            let result;
+            switch(operation) {
+                case "add":
+                    result = num1 + num2;
+                    break;
+                case "subtract":
+                    result = num1 - num2;
+                    break;
+                case "multiply":
+                    result = num1 * num2;
+                    break;
+                case "divide":
+                    result = num2 !== 0 ? num1 / num2 : "Cannot divide by zero!";
+                    break;
+                default:
+                    result = "Invalid operation";
+            }
+            
+            document.getElementById("calcOutput").innerHTML = 
+                `Result: ${result}`;
+        }
+        
+        function runFunctionExamples() {
+            // Define functions
+            function multiply(a, b) {
+                return a * b;
+            }
+            
+            function sayHello() {
+                return "Hello, World!";
+            }
+            
+            function isEven(num) {
+                return num % 2 === 0;
+            }
+            
+            // Call functions
+            const product = multiply(7, 8);
+            const greeting = sayHello();
+            const evenCheck = isEven(42) ? "even" : "odd";
+            
+            document.getElementById("functionOutput").innerHTML = 
+                `Multiplication: 7 * 8 = ${product}<br>
+                 Greeting: ${greeting}<br>
+                 42 is ${evenCheck}`;
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PHP Back-End Development</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        :root {
+            --primary: #4a148c;
+            --secondary: #7b1fa2;
+            --accent: #e91e63;
+            --light: #f5f5f5;
+            --dark: #2c3e50;
+            --success: #4caf50;
+            --info: #2196f3;
+        }
+        
+        body {
+            background: linear-gradient(135deg, var(--primary), var(--dark));
+            color: var(--light);
+            min-height: 100vh;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            text-align: center;
+            padding: 40px 0;
+            margin-bottom: 30px;
+        }
+        
+        h1 {
+            font-size: 3.5rem;
+            margin-bottom: 15px;
+            color: #fff;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        
+        .subtitle {
+            font-size: 1.6rem;
+            max-width: 800px;
+            margin: 0 auto;
+            color: var(--light);
+        }
+        
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+        }
+        
+        h2 {
+            font-size: 2.4rem;
+            margin-bottom: 25px;
+            color: var(--info);
+            border-bottom: 3px solid var(--info);
+            padding-bottom: 10px;
+        }
+        
+        h3 {
+            font-size: 1.8rem;
+            margin-bottom: 15px;
+            color: var(--accent);
+        }
+        
+        p {
+            margin-bottom: 20px;
+            font-size: 1.1rem;
+            line-height: 1.8;
+        }
+        
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+        
+        .comparison-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        
+        .code-block {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            overflow-x: auto;
+            border-left: 3px solid var(--accent);
+        }
+        
+        .interactive-demo {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        
+        .demo-output {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            min-height: 100px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .btn {
+            display: inline-block;
+            background: var(--info);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            margin: 10px 5px;
+            border-radius: 50px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        
+        .btn:hover {
+            background: #0d8bf2;
+            transform: translateY(-3px);
+        }
+        
+        .btn-accent {
+            background: var(--accent);
+        }
+        
+        .btn-accent:hover {
+            background: #d81b60;
+        }
+        
+        .btn-success {
+            background: var(--success);
+        }
+        
+        .btn-success:hover {
+            background: #43a047;
+        }
+        
+        .language-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+        
+        .language-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 20px;
+            transition: all 0.3s ease;
+        }
+        
+        .language-card:hover {
+            transform: translateY(-5px);
+            background: rgba(255, 255, 255, 0.15);
+        }
+        
+        .php-card {
+            border-top: 4px solid #8892bf;
+        }
+        
+        .python-card {
+            border-top: 4px solid #4584b6;
+        }
+        
+        .java-card {
+            border-top: 4px solid #f89820;
+        }
+        
+        .ruby-card {
+            border-top: 4px solid #cc342d;
+        }
+        
+        .example-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+        
+        .example-item {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 20px;
+        }
+        
+        .operator-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .operator-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+        }
+        
+        .loop-examples {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin: 30px 0;
+        }
+        
+        .loop-card {
+            flex: 1;
+            min-width: 300px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 20px;
+        }
+        
+        footer {
+            text-align: center;
+            padding: 30px 0;
+            margin-top: 30px;
+            font-size: 1.1rem;
+            opacity: 0.8;
+        }
+        
+        .highlight {
+            background: rgba(233, 30, 99, 0.3);
+            padding: 2px 5px;
+            border-radius: 4px;
+        }
+        
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2.5rem;
+            }
+            
+            h2 {
+                font-size: 1.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>PHP Back-End Development</h1>
+            <p class="subtitle">Learn server-side programming with PHP</p>
+        </header>
+        
+        <div class="card">
+            <h2>Web Development Overview</h2>
+            
+            <div class="comparison-grid">
+                <div class="comparison-card">
+                    <h3>Client-Side</h3>
+                    <ul>
+                        <li>HTML - Page structure</li>
+                        <li>CSS - Styling and layout</li>
+                        <li>JavaScript - Interactivity</li>
+                        <li>Runs in the user's browser</li>
+                        <li>Manipulates the DOM</li>
+                    </ul>
+                </div>
+                
+                <div class="comparison-card">
+                    <h3>Server-Side</h3>
+                    <ul>
+                        <li>PHP, Python, Java, Ruby</li>
+                        <li>Databases (MySQL, PostgreSQL)</li>
+                        <li>Runs on the web server</li>
+                        <li>Processes requests and data</li>
+                        <li>Generates dynamic content</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="interactive-demo">
+                <h3>Client-Server Interaction</h3>
+                <div class="code-block">
+                    // Client (Browser)                     // Server
+                    // Request: GET /page.php
+                    //                                         Process request
+                    //                                         Query database
+                    //                                         Generate HTML
+                    // Response: HTML page
+                    // Render page
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h2>Server-Side Languages Comparison</h2>
+            
+            <div class="language-grid">
+                <div class="language-card php-card">
+                    <h3>PHP</h3>
+                    <ul>
+                        <li>Open-source</li>
+                        <li>Cross-platform</li>
+                        <li>Great for websites with lower traffic</li>
+                        <li>Simple to learn and deploy</li>
+                        <li>Large community support</li>
+                    </ul>
+                </div>
+                
+                <div class="language-card python-card">
+                    <h3>Python</h3>
+                    <ul>
+                        <li>General-purpose, high-level</li>
+                        <li>Large standard library</li>
+                        <li>Excellent for data-heavy applications</li>
+                        <li>Handles large traffic volumes</li>
+                        <li>Popular frameworks: Django, Flask</li>
+                    </ul>
+                </div>
+                
+                <div class="language-card java-card">
+                    <h3>Java</h3>
+                    <ul>
+                        <li>Large-scale enterprise applications</li>
+                        <li>Handles high volume of traffic</li>
+                        <li>Excellent performance benchmarks</li>
+                        <li>Strong typing and object-oriented</li>
+                        <li>Popular framework: Spring</li>
+                    </ul>
+                </div>
+                
+                <div class="language-card ruby-card">
+                    <h3>Ruby</h3>
+                    <ul>
+                        <li>Elegant and expressive syntax</li>
+                        <li>Developer-friendly</li>
+                        <li>Mature framework: Ruby on Rails</li>
+                        <li>Convention over configuration</li>
+                        <li>Great for rapid development</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h2>PHP Basics</h2>
+            
+            <div class="example-container">
+                <div class="example-item">
+                    <h3>PHP Code Enclosure</h3>
+                    <div class="code-block">
+                        &lt;?php
+                        // PHP code goes here
+                        ?&gt;
+                    </div>
+                    <p>PHP code is enclosed in special tags that tell the server to process it.</p>
+                </div>
+                
+                <div class="example-item">
+                    <h3>Output with echo and print</h3>
+                    <div class="code-block">
+                        &lt;?php
+                        echo "Hello, world!"; // Outputs: Hello, world!
+                        print "Welcome!";    // Outputs: Welcome!
+                        ?&gt;
+                    </div>
+                    <p>Both <span class="highlight">echo</span> and <span class="highlight">print</span> are used to output data.</p>
+                </div>
+            </div>
+            
+            <div class="interactive-demo">
+                <h3>PHP Output Demo</h3>
+                <div class="demo-output">
+                    <?php
+                    // Simulated PHP output
+                    echo "Hello, world!<br>";
+                    print "Welcome to PHP!";
+                    ?>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h2>PHP Variables and Constants</h2>
+            
+            <div class="example-container">
+                <div class="example-item">
+                    <h3>Variables</h3>
+                    <div class="code-block">
+                        &lt;?php
+                        $name = "John Doe"; // String
+                        $age = 30;         // Integer
+                        $height = 5.9;     // Float
+                        $isStudent = true; // Boolean
+                        
+                        echo "Name: $name, Age: $age";
+                        ?&gt;
+                    </div>
+                    <p>Variables start with <span class="highlight">$</span> and are case-sensitive.</p>
+                </div>
+                
+                <div class="example-item">
+                    <h3>Constants</h3>
+                    <div class="code-block">
+                        &lt;?php
+                        define("SITE_NAME", "My PHP Site");
+                        define("MAX_USERS", 100);
+                        
+                        echo SITE_NAME; // Outputs: My PHP Site
+                        ?&gt;
+                    </div>
+                    <p>Constants are defined with <span class="highlight">define()</span> and are immutable.</p>
+                </div>
+            </div>
+            
+            <div class="interactive-demo">
+                <h3>String Concatenation</h3>
+                <div class="code-block">
+                    &lt;?php
+                    $firstName = "Jane";
+                    $lastName = "Smith";
+                    $fullName = $firstName . " " . $lastName;
+                    
+                    echo $fullName; // Outputs: Jane Smith
+                    ?&gt;
+                </div>
+                <div class="demo-output">
+                    <?php
+                    // Simulated output
+                    echo "Jane Smith";
+                    ?>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h2>PHP Operators</h2>
+            
+            <h3>Arithmetic Operators</h3>
+            <div class="operator-grid">
+                <div class="operator-card">+ Addition</div>
+                <div class="operator-card">- Subtraction</div>
+                <div class="operator-card">* Multiplication</div>
+                <div class="operator-card">/ Division</div>
+                <div class="operator-card">% Modulus (Remainder)</div>
+            </div>
+            
+            <h3>Increment/Decrement Operators</h3>
+            <div class="operator-grid">
+                <div class="operator-card">++$a (Pre-increment)</div>
+                <div class="operator-card">$a++ (Post-increment)</div>
+                <div class="operator-card">--$a (Pre-decrement)</div>
+                <div class="operator-card">$a-- (Post-decrement)</div>
+            </div>
+            
+            <h3>Comparison Operators</h3>
+            <div class="operator-grid">
+                <div class="operator-card">== Equal</div>
+                <div class="operator-card">=== Identical</div>
+                <div class="operator-card">!= Not equal</div>
+                <div class="operator-card">!== Not identical</div>
+                <div class="operator-card">&gt; Greater than</div>
+                <div class="operator-card">&lt; Less than</div>
+            </div>
+            
+            <h3>Logical Operators</h3>
+            <div class="operator-grid">
+                <div class="operator-card">&& AND</div>
+                <div class="operator-card">|| OR</div>
+                <div class="operator-card">! NOT</div>
+                <div class="operator-card">and AND</div>
+                <div class="operator-card">or OR</div>
+                <div class="operator-card">xor XOR</div>
+            </div>
+            
+            <div class="interactive-demo">
+                <h3>Operator Demo</h3>
+                <div class="code-block">
+                    &lt;?php
+                    $a = 10;
+                    $b = 5;
+                    
+                    $sum = $a + $b; // 15
+                    $diff = $a - $b; // 5
+                    $isEqual = ($a == 10); // true
+                    
+                    echo "Sum: $sum, Difference: $diff, IsEqual: $isEqual";
+                    ?&gt;
+                </div>
+                <div class="demo-output">
+                    <?php
+                    // Simulated output
+                    echo "Sum: 15, Difference: 5, IsEqual: 1";
+                    ?>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h2>Conditional Statements</h2>
+            
+            <div class="example-container">
+                <div class="example-item">
+                    <h3>if Statement</h3>
+                    <div class="code-block">
+                        &lt;?php
+                        $age = 20;
+                        
+                        if ($age >= 18) {
+                            echo "You are an adult.";
+                        }
+                        ?&gt;
+                    </div>
+                </div>
+                
+                <div class="example-item">
+                    <h3>if...else Statement</h3>
+                    <div class="code-block">
+                        &lt;?php
+                        $score = 75;
+                        
+                        if ($score >= 70) {
+                            echo "Pass!";
+                        } else {
+                            echo "Fail!";
+                        }
+                        ?&gt;
+                    </div>
+                </div>
+                
+                <div class="example-item">
+                    <h3>switch Statement</h3>
+                    <div class="code-block">
+                        &lt;?php
+                        $day = "Monday";
+                        
+                        switch ($day) {
+                            case "Monday":
+                                echo "Start of the week";
+                                break;
+                            case "Friday":
+                                echo "Almost weekend!";
+                                break;
+                            default:
+                                echo "Regular day";
+                        }
+                        ?&gt;
+                    </div>
+                </div>
+            </div>
+            
+            <div class="interactive-demo">
+                <h3>Conditional Demo</h3>
+                <div class="demo-output">
+                    <?php
+                    // Simulated output
+                    echo "You are an adult.<br>";
+                    echo "Pass!<br>";
+                    echo "Start of the week";
+                    ?>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h2>Loops</h2>
+            
+            <div class="loop-examples">
+                <div class="loop-card">
+                    <h3>while Loop</h3>
+                    <div class="code-block">
+                        &lt;?php
+                        $i = 1;
+                        while ($i <= 5) {
+                            echo "Number: $i<br>";
+                            $i++;
+                        }
+                        ?&gt;
+                    </div>
+                </div>
+                
+                <div class="loop-card">
+                    <h3>do...while Loop</h3>
+                    <div class="code-block">
+                        &lt;?php
+                        $i = 1;
+                        do {
+                            echo "Number: $i<br>";
+                            $i++;
+                        } while ($i <= 5);
+                        ?&gt;
+                    </div>
+                </div>
+                
+                <div class="loop-card">
+                    <h3>for Loop</h3>
+                    <div class="code-block">
+                        &lt;?php
+                        for ($i = 1; $i <= 5; $i++) {
+                            echo "Number: $i<br>";
+                        }
+                        ?&gt;
+                    </div>
+                </div>
+                
+                <div class="loop-card">
+                    <h3>foreach Loop</h3>
+                    <div class="code-block">
+                        &lt;?php
+                        $colors = ["Red", "Green", "Blue"];
+                        foreach ($colors as $color) {
+                            echo "$color<br>";
+                        }
+                        ?&gt;
+                    </div>
+                </div>
+            </div>
+            
+            <div class="interactive-demo">
+                <h3>Loop Output</h3>
+                <div class="demo-output">
+                    <?php
+                    // Simulated loop output
+                    echo "Number: 1<br>";
+                    echo "Number: 2<br>";
+                    echo "Number: 3<br>";
+                    echo "Number: 4<br>";
+                    echo "Number: 5<br>";
+                    echo "Red<br>Green<br>Blue";
+                    ?>
+                </div>
+            </div>
+        </div>
+        
+        <footer>
+            <p>PHP Back-End Development | Server-Side Programming</p>
+            <p>PHP: Hypertext Preprocessor - Powering over 75% of websites with server-side code</p>
+        </footer>
+    </div>
+</body>
+</html>

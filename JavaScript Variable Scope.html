@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JavaScript Scope Explained</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1, h2 {
+            color: #2c3e50;
+        }
+        .example {
+            background-color: #fff;
+            border-left: 4px solid #3498db;
+            padding: 15px;
+            margin: 20px 0;
+            position: relative;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            margin: 5px 0;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        .output {
+            background-color: #ecf0f1;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 4px;
+            min-height: 20px;
+        }
+        .var-example { border-color: #e74c3c; }
+        .let-example { border-color: #2ecc71; }
+        .const-example { border-color: #9b59b6; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #3498db;
+            color: white;
+        }
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+    <h1>JavaScript Variable Scope: var vs let vs const</h1>
+    
+    <h2>1. Variable Declaration Comparison</h2>
+    <table>
+        <tr>
+            <th>Feature</th>
+            <th>var</th>
+            <th>let</th>
+            <th>const</th>
+        </tr>
+        <tr>
+            <td>Scope</td>
+            <td>Function or global</td>
+            <td>Block</td>
+            <td>Block</td>
+        </tr>
+        <tr>
+            <td>Hoisting</td>
+            <td>Yes (initialized as undefined)</td>
+            <td>Yes (not initialized)</td>
+            <td>Yes (not initialized)</td>
+        </tr>
+        <tr>
+            <td>Re-declaration</td>
+            <td>Allowed</td>
+            <td>Not allowed</td>
+            <td>Not allowed</td>
+        </tr>
+        <tr>
+            <td>Reassignment</td>
+            <td>Allowed</td>
+            <td>Allowed</td>
+            <td>Not allowed</td>
+        </tr>
+    </table>
+
+    <h2>2. var - Function Scope</h2>
+    <div class="example var-example">
+        <p><strong>var is function-scoped</strong> - visible anywhere in the function where it's declared</p>
+        <button onclick="varFunctionScope()">Run var Example</button>
+        <div class="output" id="varFunctionOutput"></div>
+    </div>
+
+    <h2>3. let and const - Block Scope</h2>
+    <div class="example let-example">
+        <p><strong>let and const are block-scoped</strong> - only visible within the block where they're declared</p>
+        <button onclick="letBlockScope()">Run let Example</button>
+        <div class="output" id="letBlockOutput"></div>
+    </div>
+
+    <h2>4. Hoisting Differences</h2>
+    <div class="example">
+        <p><strong>var:</strong> Hoisted and initialized with undefined</p>
+        <p><strong>let/const:</strong> Hoisted but not initialized (Temporal Dead Zone)</p>
+        <button onclick="hoistingExample()">Run Hoisting Example</button>
+        <div class="output" id="hoistingOutput"></div>
+    </div>
+
+    <h2>5. const - Immutable Binding</h2>
+    <div class="example const-example">
+        <p><strong>const</strong> variables cannot be reassigned, but their properties can be modified (for objects/arrays)</p>
+        <button onclick="constExample()">Run const Example</button>
+        <div class="output" id="constOutput"></div>
+    </div>
+
+    <script>
+        // 1. var - Function Scope Example
+        function varFunctionScope() {
+            var output = "";
+            if (true) {
+                var functionScoped = "I'm function scoped";
+                output += "Inside block: " + functionScoped + "<br>";
+            }
+            output += "Outside block: " + functionScoped + "<br>";
+            document.getElementById("varFunctionOutput").innerHTML = output;
+        }
+
+        // 2. let - Block Scope Example
+        function letBlockScope() {
+            let output = "";
+            if (true) {
+                let blockScoped = "I'm block scoped";
+                output += "Inside block: " + blockScoped + "<br>";
+            }
+            try {
+                output += "Outside block: " + blockScoped + "<br>";
+            } catch (e) {
+                output += "Outside block: " + e.message + "<br>";
+            }
+            document.getElementById("letBlockOutput").innerHTML = output;
+        }
+
+        // 3. Hoisting Example
+        function hoistingExample() {
+            let output = "";
+            
+            // var example
+            try {
+                output += "var before declaration: " + hoistedVar + "<br>";
+            } catch (e) {
+                output += "var before declaration: " + e.message + "<br>";
+            }
+            var hoistedVar = "I'm hoisted";
+            
+            // let example
+            try {
+                output += "let before declaration: " + hoistedLet + "<br>";
+            } catch (e) {
+                output += "let before declaration: " + e.message + "<br>";
+            }
+            let hoistedLet = "I'm not initialized until declaration";
+            
+            output += "After declarations:<br>";
+            output += "var: " + hoistedVar + "<br>";
+            output += "let: " + hoistedLet + "<br>";
+            
+            document.getElementById("hoistingOutput").innerHTML = output;
+        }
+
+        // 4. const Example
+        function constExample() {
+            let output = "";
+            
+            // Primitive value
+            const PI = 3.14159;
+            output += "PI: " + PI + "<br>";
+            
+            try {
+                PI = 3.14; // This will throw an error
+                output += "PI reassigned: " + PI + "<br>";
+            } catch (e) {
+                output += "Cannot reassign PI: " + e.message + "<br>";
+            }
+            
+            // Object - the binding is constant, not the value
+            const person = { name: "Alice" };
+            output += "Original person: " + JSON.stringify(person) + "<br>";
+            
+            person.name = "Bob"; // This is allowed
+            output += "Modified person: " + JSON.stringify(person) + "<br>";
+            
+            try {
+                person = { name: "Charlie" }; // This will throw an error
+                output += "Reassigned person: " + JSON.stringify(person) + "<br>";
+            } catch (e) {
+                output += "Cannot reassign person: " + e.message + "<br>";
+            }
+            
+            document.getElementById("constOutput").innerHTML = output;
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AJAX Explained</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        :root {
+            --primary: #1a237e;
+            --secondary: #4a148c;
+            --accent1: #ff6f00;
+            --accent2: #00bcd4;
+            --dark: #121212;
+            --light: #f5f5f5;
+        }
+        
+        body {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: var(--light);
+            min-height: 100vh;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            text-align: center;
+            padding: 40px 0;
+            margin-bottom: 30px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+        }
+        
+        h1 {
+            font-size: 3.5rem;
+            margin-bottom: 15px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+            color: #ffd54f;
+        }
+        
+        .subtitle {
+            font-size: 1.6rem;
+            opacity: 0.9;
+            max-width: 800px;
+            margin: 0 auto;
+            color: #e0f7fa;
+        }
+        
+        .content-section {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+        }
+        
+        h2 {
+            font-size: 2.4rem;
+            margin-bottom: 25px;
+            color: var(--accent2);
+            border-bottom: 3px solid var(--accent2);
+            padding-bottom: 10px;
+        }
+        
+        h3 {
+            font-size: 1.8rem;
+            margin-bottom: 15px;
+            color: #ffd54f;
+        }
+        
+        .card-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 25px;
+            margin-top: 25px;
+        }
+        
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+            background: rgba(255, 255, 255, 0.15);
+        }
+        
+        .example {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 1.1rem;
+            overflow-x: auto;
+            border-left: 3px solid var(--accent1);
+        }
+        
+        .output {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-family: 'Courier New', monospace;
+            min-height: 60px;
+            border-left: 3px solid var(--accent2);
+        }
+        
+        .btn {
+            display: inline-block;
+            background: linear-gradient(to right, var(--accent1), #ffa000);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            margin-top: 15px;
+            border-radius: 50px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+        
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+            background: linear-gradient(to right, #ffa000, var(--accent1));
+        }
+        
+        .method-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .method-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        
+        .method-card h4 {
+            font-size: 1.4rem;
+            color: var(--accent1);
+            margin-bottom: 15px;
+        }
+        
+        .method-card p {
+            margin-bottom: 10px;
+        }
+        
+        .method-icon {
+            font-size: 2.5rem;
+            margin-bottom: 15px;
+            color: var(--accent2);
+        }
+        
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background: rgba(0, 0, 0, 0.2);
+        }
+        
+        .comparison-table th, .comparison-table td {
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 12px;
+            text-align: left;
+        }
+        
+        .comparison-table th {
+            background: rgba(0, 0, 0, 0.4);
+            color: var(--accent2);
+            font-size: 1.1rem;
+        }
+        
+        .comparison-table tr:nth-child(even) {
+            background: rgba(255, 255, 255, 0.05);
+        }
+        
+        .array-type-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .array-type {
+            flex: 1;
+            min-width: 300px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+        }
+        
+        .loop-visual {
+            display: flex;
+            justify-content: center;
+            margin: 20px 0;
+        }
+        
+        .loop-circle {
+            width: 300px;
+            height: 300px;
+            border: 3px solid var(--accent1);
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+        
+        .loop-step {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background: var(--accent2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: var(--dark);
+            box-shadow: 0 0 10px rgba(0, 188, 212, 0.5);
+        }
+        
+        .process-flow {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            margin: 40px 0;
+            flex-wrap: wrap;
+        }
+        
+        .process-step {
+            width: 150px;
+            text-align: center;
+            margin: 10px;
+            position: relative;
+        }
+        
+        .step-icon {
+            width: 80px;
+            height: 80px;
+            background: var(--accent1);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 15px;
+            font-size: 2rem;
+            font-weight: bold;
+            color: white;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+        
+        .step-text {
+            font-size: 1.1rem;
+            font-weight: 500;
+        }
+        
+        .step-arrow {
+            position: absolute;
+            top: 35px;
+            right: -40px;
+            font-size: 2rem;
+            color: var(--accent2);
+        }
+        
+        .request-visual {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin: 25px 0;
+        }
+        
+        .request-bar {
+            height: 40px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .bar-progress {
+            position: absolute;
+            height: 100%;
+            left: 0;
+            top: 0;
+            background: linear-gradient(90deg, var(--accent1), var(--accent2));
+            border-radius: 20px;
+            width: 0%;
+            transition: width 1.5s ease;
+        }
+        
+        .bar-text {
+            position: relative;
+            z-index: 2;
+            font-weight: 500;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            margin-right: 10px;
+            background: #555;
+        }
+        
+        .status-active {
+            background: var(--accent2);
+            box-shadow: 0 0 10px var(--accent2);
+        }
+        
+        .status-complete {
+            background: #4CAF50;
+            box-shadow: 0 0 10px #4CAF50;
+        }
+        
+        .status-error {
+            background: #f44336;
+            box-shadow: 0 0 10px #f44336;
+        }
+        
+        .code-block {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 1rem;
+            overflow-x: auto;
+            border-left: 3px solid var(--accent1);
+        }
+        
+        .demo-container {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 12px;
+            padding: 25px;
+            margin: 25px 0;
+        }
+        
+        .demo-controls {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+        
+        .demo-result {
+            min-height: 150px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        
+        .state-container {
+            display: flex;
+            justify-content: space-around;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        
+        .state-box {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 8px;
+            width: 120px;
+            text-align: center;
+            margin: 10px;
+            transition: all 0.3s ease;
+        }
+        
+        .state-box.active {
+            background: rgba(0, 188, 212, 0.3);
+            box-shadow: 0 0 15px rgba(0, 188, 212, 0.5);
+        }
+        
+        .state-title {
+            font-size: 1.1rem;
+            margin-bottom: 10px;
+            color: var(--accent2);
+        }
+        
+        .state-value {
+            font-size: 1.3rem;
+            font-weight: bold;
+        }
+        
+        footer {
+            text-align: center;
+            padding: 30px 0;
+            margin-top: 30px;
+            font-size: 1.1rem;
+            opacity: 0.8;
+        }
+        
+        @media (max-width: 768px) {
+            .card-container {
+                grid-template-columns: 1fr;
+            }
+            
+            h1 {
+                font-size: 2.5rem;
+            }
+            
+            h2 {
+                font-size: 1.8rem;
+            }
+            
+            .loop-circle {
+                width: 200px;
+                height: 200px;
+            }
+            
+            .step-arrow {
+                display: none;
+            }
+            
+            .process-step {
+                width: 100%;
+                margin-bottom: 30px;
+            }
+            
+            .process-flow {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>AJAX Explained</h1>
+            <p class="subtitle">Asynchronous JavaScript and XML - Dynamic Web Communication</p>
+        </header>
+        
+        <!-- Definition Section -->
+        <section class="content-section">
+            <h2>What is AJAX?</h2>
+            <p>AJAX (Asynchronous JavaScript and XML) is a technique for creating fast and dynamic web pages. It allows web pages to be updated asynchronously by exchanging data with a web server behind the scenes. This means that it is possible to update parts of a web page without reloading the whole page.</p>
+            
+            <div class="card">
+                <h3>Why Use AJAX?</h3>
+                <ul style="padding-left: 20px; margin-top: 15px;">
+                    <li>Create more responsive web applications</li>
+                    <li>Reduce server load by updating only necessary content</li>
+                    <li>Improve user experience with seamless interactions</li>
+                    <li>Enable real-time data updates without page refresh</li>
+                </ul>
+            </div>
+        </section>
+        
+        <!-- How AJAX Works Section -->
+        <section class="content-section">
+            <h2>How AJAX Works</h2>
+            
+            <div class="process-flow">
+                <div class="process-step">
+                    <div class="step-icon">1</div>
+                    <div class="step-text">Event occurs on web page</div>
+                </div>
+                <div class="step-arrow">→</div>
+                
+                <div class="process-step">
+                    <div class="step-icon">2</div>
+                    <div class="step-text">Create XMLHttpRequest</div>
+                </div>
+                <div class="step-arrow">→</div>
+                
+                <div class="process-step">
+                    <div class="step-icon">3</div>
+                    <div class="step-text">Send request to server</div>
+                </div>
+                <div class="step-arrow">→</div>
+                
+                <div class="process-step">
+                    <div class="step-icon">4</div>
+                    <div class="step-text">Server processes request</div>
+                </div>
+                <div class="step-arrow">→</div>
+                
+                <div class="process-step">
+                    <div class="step-icon">5</div>
+                    <div class="step-text">Server sends response</div>
+                </div>
+                <div class="step-arrow">→</div>
+                
+                <div class="process-step">
+                    <div class="step-icon">6</div>
+                    <div class="step-text">JavaScript processes data</div>
+                </div>
+                <div class="step-arrow">→</div>
+                
+                <div class="process-step">
+                    <div class="step-icon">7</div>
+                    <div class="step-text">Update page content</div>
+                </div>
+            </div>
+            
+            <div class="request-visual">
+                <h3>Request Lifecycle</h3>
+                <div class="request-bar">
+                    <span class="status-indicator" id="state0"></span>
+                    <div class="bar-progress" id="requestProgress"></div>
+                    <div class="bar-text">Request not initialized (0)</div>
+                </div>
+                
+                <div class="request-bar">
+                    <span class="status-indicator" id="state1"></span>
+                    <div class="bar-text">Server connection established (1)</div>
+                </div>
+                
+                <div class="request-bar">
+                    <span class="status-indicator" id="state2"></span>
+                    <div class="bar-text">Request received (2)</div>
+                </div>
+                
+                <div class="request-bar">
+                    <span class="status-indicator" id="state3"></span>
+                    <div class="bar-text">Processing request (3)</div>
+                </div>
+                
+                <div class="request-bar">
+                    <span class="status-indicator" id="state4"></span>
+                    <div class="bar-text">Request finished and response ready (4)</div>
+                </div>
+                
+                <button class="btn" onclick="simulateRequest()">Simulate AJAX Request</button>
+            </div>
+        </section>
+        
+        <!-- XMLHttpRequest Section -->
+        <section class="content-section">
+            <h2>XMLHttpRequest Object</h2>
+            <p>The XMLHttpRequest (XHR) object is used to exchange data asynchronously with a server. It updates parts of a web page without reloading the whole page.</p>
+            
+            <div class="card-container">
+                <div class="card">
+                    <h3>XHR Attributes</h3>
+                    <div class="comparison-table">
+                        <table>
+                            <tr>
+                                <th>Attribute</th>
+                                <th>Description</th>
+                            </tr>
+                            <tr>
+                                <td>readyState</td>
+                                <td>Holds the status of the XMLHttpRequest (0-4)</td>
+                            </tr>
+                            <tr>
+                                <td>responseText</td>
+                                <td>Response data as a string</td>
+                            </tr>
+                            <tr>
+                                <td>responseXML</td>
+                                <td>Response data as XML data</td>
+                            </tr>
+                            <tr>
+                                <td>status</td>
+                                <td>HTTP status code (200, 404, etc.)</td>
+                            </tr>
+                            <tr>
+                                <td>statusText</td>
+                                <td>HTTP status message ("OK", "Not Found")</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h3>XHR Methods</h3>
+                    <div class="comparison-table">
+                        <table>
+                            <tr>
+                                <th>Method</th>
+                                <th>Description</th>
+                            </tr>
+                            <tr>
+                                <td>open(method, url, async)</td>
+                                <td>Specifies the type of request</td>
+                            </tr>
+                            <tr>
+                                <td>send()</td>
+                                <td>Sends the request to the server</td>
+                            </tr>
+                            <tr>
+                                <td>abort()</td>
+                                <td>Cancels the current request</td>
+                            </tr>
+                            <tr>
+                                <td>setRequestHeader()</td>
+                                <td>Adds HTTP headers to the request</td>
+                            </tr>
+                            <tr>
+                                <td>getResponseHeader()</td>
+                                <td>Returns specific header information</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="state-container">
+                <div class="state-box" id="stateBox0">
+                    <div class="state-title">0: UNSENT</div>
+                    <div class="state-value">0</div>
+                    <div>Not initialized</div>
+                </div>
+                <div class="state-box" id="stateBox1">
+                    <div class="state-title">1: OPENED</div>
+                    <div class="state-value">1</div>
+                    <div>Connection established</div>
+                </div>
+                <div class="state-box" id="stateBox2">
+                    <div class="state-title">2: HEADERS</div>
+                    <div class="state-value">2</div>
+                    <div>Request received</div>
+                </div>
+                <div class="state-box" id="stateBox3">
+                    <div class="state-title">3: LOADING</div>
+                    <div class="state-value">3</div>
+                    <div>Processing request</div>
+                </div>
+                <div class="state-box" id="stateBox4">
+                    <div class="state-title">4: DONE</div>
+                    <div class="state-value">4</div>
+                    <div>Request complete</div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- AJAX Step-by-Step Section -->
+        <section class="content-section">
+            <h2>AJAX Implementation</h2>
+            
+            <div class="card">
+                <h3>Step-by-Step XHR Implementation</h3>
+                <div class="code-block">
+                    // 1. Create XHR Object<br>
+                    var xhr = new XMLHttpRequest();<br><br>
+                    
+                    // 2. Create callback function<br>
+                    xhr.onreadystatechange = function() {<br>
+                    &nbsp;&nbsp;if (xhr.readyState == 4) {<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;if (xhr.status == 200) {<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// Process the response<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;document.getElementById("demo").innerHTML = this.responseText;<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;} else if (xhr.status == 404) {<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// Handle "not found" error<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;console.error("Resource not found");<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;}<br>
+                    &nbsp;&nbsp;}<br>
+                    };<br><br>
+                    
+                    // 3. Open the connection<br>
+                    xhr.open('GET', 'api/data', true);<br><br>
+                    
+                    // 4. Send the request<br>
+                    xhr.send();
+                </div>
+            </div>
+            
+            <div class="demo-container">
+                <h3>Interactive AJAX Demo</h3>
+                <p>Click the button to simulate an AJAX request to a mock API:</p>
+                
+                <div class="demo-controls">
+                    <button class="btn" onclick="sendRequest('success')">Send Successful Request</button>
+                    <button class="btn" onclick="sendRequest('error')">Send Error Request</button>
+                    <button class="btn" onclick="sendRequest('timeout')">Send Timeout Request</button>
+                </div>
+                
+                <div class="output" id="demoOutput">Click a button to start request...</div>
+                <div class="demo-result" id="demoResult"></div>
+            </div>
+        </section>
+        
+        <!-- AJAX with jQuery Section -->
+        <section class="content-section">
+            <h2>AJAX with jQuery</h2>
+            <p>jQuery simplifies AJAX implementation with its $.ajax() method:</p>
+            
+            <div class="code-block">
+                $.ajax({<br>
+                &nbsp;&nbsp;url: 'process.php',<br>
+                &nbsp;&nbsp;type: 'POST',<br>
+                &nbsp;&nbsp;data: { <br>
+                &nbsp;&nbsp;&nbsp;&nbsp;username: 'john_doe',<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;action: 'update_profile'<br>
+                &nbsp;&nbsp;},<br>
+                &nbsp;&nbsp;timeout: 3000, // 3 seconds<br>
+                &nbsp;&nbsp;success: function(data) {<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;// Handle success<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;$('#result').html(data);<br>
+                &nbsp;&nbsp;},<br>
+                &nbsp;&nbsp;error: function(xhr, status, error) {<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;// Handle error<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;console.error('Error:', error);<br>
+                &nbsp;&nbsp;},<br>
+                &nbsp;&nbsp;complete: function() {<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;// Always runs after success/error<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;console.log('Request completed');<br>
+                &nbsp;&nbsp;}<br>
+                });
+            </div>
+            
+            <div class="card">
+                <h3>jQuery AJAX Advantages</h3>
+                <ul style="padding-left: 20px; margin-top: 15px;">
+                    <li>Simplified syntax and cross-browser compatibility</li>
+                    <li>Automatic handling of data types (JSON, XML, HTML)</li>
+                    <li>Built-in error handling mechanisms</li>
+                    <li>Support for promises and chaining</li>
+                    <li>Abstraction of complex XHR features</li>
+                </ul>
+            </div>
+        </section>
+        
+        <footer>
+            <p>AJAX Explained &bull; Created with HTML, CSS, and JavaScript</p>
+            <p>Asynchronous communication is fundamental to modern web applications</p>
+        </footer>
+    </div>
+
+    <script>
+        // AJAX Simulation Functions
+        function simulateRequest() {
+            const states = document.querySelectorAll('.status-indicator');
+            const progressBar = document.getElementById('requestProgress');
+            const stateBoxes = document.querySelectorAll('.state-box');
+            
+            // Reset all states
+            states.forEach(state => state.className = 'status-indicator');
+            stateBoxes.forEach(box => box.classList.remove('active'));
+            progressBar.style.width = '0%';
+            
+            // Reset output
+            document.getElementById('demoOutput').innerHTML = 'Starting request simulation...';
+            
+            // Simulate request lifecycle
+            setTimeout(() => {
+                states[0].className = 'status-indicator status-active';
+                stateBoxes[0].classList.add('active');
+                document.getElementById('demoOutput').innerHTML = 'Request initialized (0)';
+            }, 500);
+            
+            setTimeout(() => {
+                states[1].className = 'status-indicator status-active';
+                stateBoxes[1].classList.add('active');
+                document.getElementById('demoOutput').innerHTML = 'Server connection established (1)';
+                progressBar.style.width = '25%';
+            }, 1500);
+            
+            setTimeout(() => {
+                states[2].className = 'status-indicator status-active';
+                stateBoxes[2].classList.add('active');
+                document.getElementById('demoOutput').innerHTML = 'Request received (2)';
+                progressBar.style.width = '50%';
+            }, 2500);
+            
+            setTimeout(() => {
+                states[3].className = 'status-indicator status-active';
+                stateBoxes[3].classList.add('active');
+                document.getElementById('demoOutput').innerHTML = 'Processing request (3)';
+                progressBar.style.width = '75%';
+            }, 3500);
+            
+            setTimeout(() => {
+                states[4].className = 'status-indicator status-complete';
+                stateBoxes[4].classList.add('active');
+                document.getElementById('demoOutput').innerHTML = 'Request finished (4) - Status: 200 OK';
+                progressBar.style.width = '100%';
+                
+                // Display sample data
+                setTimeout(() => {
+                    document.getElementById('demoResult').innerHTML = `
+                        <h4>Response Data:</h4>
+                        <div class="output">
+                            {<br>
+                            &nbsp;&nbsp;"status": "success",<br>
+                            &nbsp;&nbsp;"message": "Request completed successfully",<br>
+                            &nbsp;&nbsp;"data": {<br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;"id": 12345,<br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;"name": "John Doe",<br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;"email": "john@example.com"<br>
+                            &nbsp;&nbsp;}<br>
+                            }
+                        </div>
+                    `;
+                }, 500);
+            }, 4500);
+        }
+        
+        function sendRequest(type) {
+            const demoOutput = document.getElementById('demoOutput');
+            const demoResult = document.getElementById('demoResult');
+            
+            demoOutput.innerHTML = 'Sending request...';
+            demoResult.innerHTML = '';
+            
+            // Reset state boxes
+            document.querySelectorAll('.state-box').forEach(box => {
+                box.classList.remove('active');
+            });
+            
+            // Simulate AJAX request
+            setTimeout(() => {
+                document.getElementById('stateBox0').classList.add('active');
+            }, 300);
+            
+            setTimeout(() => {
+                document.getElementById('stateBox1').classList.add('active');
+            }, 800);
+            
+            setTimeout(() => {
+                document.getElementById('stateBox2').classList.add('active');
+                demoOutput.innerHTML = 'Request received by server (2)';
+            }, 1200);
+            
+            setTimeout(() => {
+                document.getElementById('stateBox3').classList.add('active');
+                demoOutput.innerHTML = 'Processing request (3)';
+            }, 1800);
+            
+            setTimeout(() => {
+                document.getElementById('stateBox4').classList.add('active');
+                
+                if (type === 'success') {
+                    demoOutput.innerHTML = 'Request completed (4) - Status: 200 OK';
+                    demoResult.innerHTML = `
+                        <h4>Successful Response:</h4>
+                        <div class="output">
+                            {<br>
+                            &nbsp;&nbsp;"status": "success",<br>
+                            &nbsp;&nbsp;"message": "Data loaded successfully",<br>
+                            &nbsp;&nbsp;"timestamp": "${new Date().toLocaleTimeString()}",<br>
+                            &nbsp;&nbsp;"data": [<br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;{"id": 1, "name": "Item 1"},<br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;{"id": 2, "name": "Item 2"},<br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;{"id": 3, "name": "Item 3"}<br>
+                            &nbsp;&nbsp;]<br>
+                            }
+                        </div>
+                    `;
+                } else if (type === 'error') {
+                    demoOutput.innerHTML = 'Request completed (4) - Status: 404 Not Found';
+                    demoResult.innerHTML = `
+                        <h4>Error Response:</h4>
+                        <div class="output" style="border-left-color: #f44336;">
+                            Error: The requested resource was not found<br>
+                            Status: 404 Not Found<br>
+                            Please check the URL and try again
+                        </div>
+                    `;
+                } else if (type === 'timeout') {
+                    demoOutput.innerHTML = 'Request failed - Connection timeout';
+                    demoResult.innerHTML = `
+                        <h4>Timeout Error:</h4>
+                        <div class="output" style="border-left-color: #ff9800;">
+                            Error: Request timed out<br>
+                            The server did not respond in time<br>
+                            Please check your connection and try again
+                        </div>
+                    `;
+                }
+            }, 2500);
+        }
+        
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('demoOutput').innerHTML = 'Ready to make AJAX requests';
+        });
+    </script>
+</body>
+</html>
